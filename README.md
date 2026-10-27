@@ -2,6 +2,8 @@
 
 面向 Windows 10 22H2 / Windows 11 x64 的本地文字模型桌面软件。界面使用 PySide6，推理由 Ollama 命令行运行环境提供。版本：0.1.0。
 
+开发协作署名：**OpenAI Codex**（AI 编程助手）。本项目初版代码与文档由 Codex 协助完成。
+
 ## 给普通用户
 
 下载 `ModelDock-0.1.0-windows-x64.zip`，**完整解压**后双击 `ModelDock.exe`。无需安装 Python，也无需云端 API 密钥。不要只复制 exe，旁边的 `_internal` 目录是必要依赖。
@@ -12,6 +14,12 @@
 4. 在“本地对话”使用模型，或在“API 接入”复制 Python、PowerShell、cURL 示例。
 
 首次下载需要联网，模型下载可能较大。已有 Ollama 和模型时会复用。取消下载后可重试，Ollama 会复用已下载的分片。安装软件与下载模型都会占用磁盘空间。
+
+## Ollama CLI 声明
+
+ModelDock 是独立的图形化桌面项目，通过调用 [Ollama 官方命令行工具（CLI）](https://github.com/ollama/ollama)的 `ollama serve`、`ollama pull` 命令启动本地服务、下载模型，并使用其 HTTP API 完成推理。模型运行能力由 Ollama 提供。
+
+本项目不是 Ollama 官方客户端，与 Ollama 项目无隶属关系。发行包不内置 Ollama 安装程序或模型权重；Ollama 及模型分别从官方来源下载，并遵循各自的许可证。使用与配置方法请参阅 [Ollama Windows 官方文档](https://docs.ollama.com/windows)，上游许可请参阅 [Ollama LICENSE](https://github.com/ollama/ollama/blob/main/LICENSE)。
 
 ## 功能与推荐依据
 
