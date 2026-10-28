@@ -32,9 +32,12 @@ def main():
             if window.detecting or window.checking:
                 QTimer.singleShot(200, check)
                 return
+            window.i18n.save=None
+            window.i18n.set_language("en")
+            window.i18n.apply()
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(json.dumps({"startup": "passed", "frozen": bool(getattr(sys, "frozen", False)),
-                "pages": window.stack.count(), "hardware_detected": window.hw is not None,
+                "pages": window.stack.count(), "english_ui": "Deployment" in window.nav[0].text(), "hardware_detected": window.hw is not None,
                 "models": [m.get("name") for m in window.models]}, ensure_ascii=False, indent=2), "utf-8")
             window.close()
             app.quit()

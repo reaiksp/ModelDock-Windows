@@ -10,3 +10,4 @@
 *.png binary
 *.zip binary
 *.exe binary
+*.json text eol=lf

@@ -11,6 +11,7 @@ import time
 import urllib.request
 from pathlib import Path
 
+from .i18n import response_policy, adapt_user_message
 from .system import DATA_DIR, FLAGS, command, find_ollama, model_dir
 
 HOST, PORT = "127.0.0.1", 11434
@@ -191,12 +192,17 @@ def deploy(tag, task, log, progress):
     return warmup(tag, task, log)
 
 
-def stream_chat(tag, messages, task, emit):
+def stream_chat(tag, messages, task, emit, response_language="auto"):
     task.check()
+    messages = [dict(m) for m in messages]
+    for message in reversed(messages):
+        if message.get('role') == 'user':
+            message['content'] = adapt_user_message(message['content'], response_language)
+            break
     conn = http.client.HTTPConnection(HOST, PORT, timeout=180)
     task.connection = conn
     try:
-        conn.request("POST", "/api/chat", json.dumps({"model": tag, "messages": messages,
+        conn.request("POST", "/api/chat", json.dumps({"model": tag, "messages": [{"role":"system","content":response_policy(response_language)}] + messages,
                      "stream": True, "think": False, "options": {"num_ctx": 4096}}).encode(),
                      {"Content-Type": "application/json"})
         response = conn.getresponse()

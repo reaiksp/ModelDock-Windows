@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 
 from . import __version__, runtime
 from .catalog import CATALOG, recommend
+from .i18n import LanguageManager, source_text, tr
 from .system import DATA_DIR, detect, disk_free, find_ollama, load_settings, save_settings
 
 
@@ -164,6 +165,13 @@ class Window(QMainWindow):
             nav.setCheckable(True)
             side.addWidget(nav)
             self.nav.append(nav)
+        side.addSpacing(12)
+        side.addWidget(label("Language / 语言", "sideMuted"))
+        self.language_combo = QComboBox()
+        self.language_combo.addItem("简体中文", "zh_CN")
+        self.language_combo.addItem("English", "en")
+        self.language_combo.setProperty('_i18n_skip', True)
+        side.addWidget(self.language_combo)
         side.addStretch()
         self.side_status = label("●  正在检查服务…", "sideStatus", True)
         side.addWidget(self.side_status)
@@ -178,12 +186,34 @@ class Window(QMainWindow):
         self.build_chat()
         self.build_api()
         self.build_logs()
+        self.local_combo.setProperty('_i18n_user_items', True)
+        self.chat_model.setProperty('_i18n_skip', True)
+        self.i18n = LanguageManager(self, self.settings.get('ui_language','zh_CN'), self.save_language)
+        self.language_combo.setCurrentIndex(max(0,self.language_combo.findData(self.i18n.language)))
+        self.language_combo.currentIndexChanged.connect(lambda: self.i18n.set_language(self.language_combo.currentData()))
+        self.i18n.changed.connect(self.language_changed)
+        self.i18n.apply()
         self.navigate(0)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.refresh_service)
         self.timer.start(12000)
         QTimer.singleShot(100, self.scan)
         QTimer.singleShot(150, self.refresh_service)
+
+    def save_language(self, language):
+        self.settings['ui_language'] = language
+        self.persist()
+
+    def save_reply_language(self):
+        self.settings['response_language'] = self.reply_language.currentData()
+        self.persist()
+
+    def language_changed(self, language):
+        blocked = self.language_combo.blockSignals(True)
+        self.language_combo.setCurrentIndex(self.language_combo.findData(language))
+        self.language_combo.blockSignals(blocked)
+        if self.messages or self.chat_job:
+            self.render_chat()
 
     def page(self, eyebrow, title, subtitle):
         scroll = QScrollArea()
@@ -330,7 +360,7 @@ class Window(QMainWindow):
         if not self.hw:
             return
         self.rec = recommend(self.hw.ram, self.hw.available, self.hw.vram, self.hw.disk,
-                             self.usage.currentText(), self.preference.currentText())
+                             source_text(self.usage), source_text(self.preference))
         self.rec_title.setText(self.rec.model.title if self.rec.model else "暂时没有安全的推荐")
         self.rec_reason.setText(self.rec.reason)
         self.rec_mode.setText(self.rec.mode)
@@ -339,7 +369,7 @@ class Window(QMainWindow):
 
     def persist(self):
         try:
-            save_settings({"usage": self.usage.currentText(), "preference": self.preference.currentText(), "model": self.active_model})
+            save_settings(dict(self.settings, usage=source_text(self.usage), preference=source_text(self.preference), model=self.active_model))
         except OSError as exc:
             self.log(f"偏好保存失败：{exc}")
 
@@ -507,6 +537,7 @@ class Window(QMainWindow):
         self.transcript = QTextEdit()
         self.transcript.setReadOnly(True)
         self.transcript.setMinimumHeight(365)
+        self.transcript.setProperty("_i18n_plain_ui", True)
         self.transcript.setPlainText("你好！部署或选择一个本地模型，然后发送第一条消息。")
         box.addWidget(self.transcript, 1)
         self.prompt = QPlainTextEdit()
@@ -514,6 +545,12 @@ class Window(QMainWindow):
         self.prompt.setMaximumHeight(100)
         box.addWidget(self.prompt)
         row = QHBoxLayout()
+        self.reply_language = QComboBox()
+        for title, value in [("跟随用户输入", "auto"), ("简体中文", "zh_CN"), ("English", "en")]:
+            self.reply_language.addItem(title, value)
+        self.reply_language.setCurrentIndex(max(0,self.reply_language.findData(self.settings.get("response_language","auto"))))
+        self.reply_language.currentIndexChanged.connect(self.save_reply_language)
+        row.addWidget(self.reply_language)
         self.chat_status = label("本地推理 · 不需要云端密钥", "muted")
         row.addWidget(self.chat_status, 1)
         self.stop_chat_button = button("停止生成", self.stop_chat)
@@ -531,9 +568,10 @@ class Window(QMainWindow):
         self.transcript.clear()
 
     def render_chat(self):
-        text = "\n\n".join(("你" if m["role"] == "user" else "助手") + "\n" + m["content"] for m in self.messages)
+        self.transcript.setProperty("_i18n_plain_ui", False)
+        text = "\n\n".join((tr("你") if m["role"] == "user" else tr("助手")) + "\n" + m["content"] for m in self.messages)
         if self.chat_job:
-            text += "\n\n助手\n" + self.answer
+            text += "\n\n" + tr("助手") + "\n" + self.answer
         self.transcript.setPlainText(text)
         bar = self.transcript.verticalScrollBar()
         bar.setValue(bar.maximum())
@@ -557,7 +595,7 @@ class Window(QMainWindow):
         self.stop_chat_button.setEnabled(True)
         self.chat_status.setText("正在本机生成…首次加载可能较慢")
         snapshot = [dict(m) for m in self.messages[-20:]]
-        self.chat_job = self.launch(lambda j: runtime.stream_chat(self.active_model, snapshot, j.task, j.token.emit),
+        self.chat_job = self.launch(lambda j: runtime.stream_chat(self.active_model, snapshot, j.task, j.token.emit, self.settings.get("response_language","auto")),
                                     self.chat_complete, self.chat_failed)
         self.chat_job.token.connect(self.receive_token)
         self.chat_job.finished.connect(self.chat_finished)
@@ -666,7 +704,7 @@ class Window(QMainWindow):
         def complete(result):
             self.api_result.setPlainText(json.dumps(result, ensure_ascii=False, indent=2))
         def failed(message):
-            self.api_result.setPlainText(message)
+            self.api_result.setPlainText(tr(message))
             self.log(message)
         job = self.launch(lambda j: runtime.request("/v1/chat/completions", body, 180, j.task), complete, failed)
         job.finished.connect(lambda: self.test_api_button.setEnabled(True))
