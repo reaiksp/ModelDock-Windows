@@ -21,7 +21,15 @@ def collect(root):
         fields.append(node)
         return '{'+str(len(fields)-1)+'}'
     for file in root.glob('*.py'):
-        if file.name in {'store.py','secrets.py','providers.py'}: continue
+        if file.name == 'secrets.py': continue
+        if file.name in {'store.py','providers.py'}:
+            tree=ast.parse(file.read_text('utf-8-sig'))
+            for node in ast.walk(tree):
+                if isinstance(node,ast.Raise) and isinstance(node.exc,ast.Call) and node.exc.args:
+                    value=node.exc.args[0]
+                    if isinstance(value,ast.Constant) and isinstance(value.value,str) and chinese(value.value):
+                        result.add(value.value)
+            continue
         tree=ast.parse(file.read_text('utf-8-sig'))
         for node in ast.walk(tree):
             if isinstance(node,ast.Constant) and isinstance(node.value,str): text=node.value
@@ -59,7 +67,7 @@ if __name__=='__main__':
     for root in ROOTS:
         path=root/'translations.json'
         if path.exists(): existing.update(json.loads(path.read_text('utf-8')))
-    override={'你':'You','助手':'Assistant','助手 · 正在生成':'Assistant · generating','助手 · 已中断':'Assistant · interrupted','你 · 已中断':'You · interrupted','简体中文':'简体中文','界面语言':'Interface language','AI 回复语言':'AI reply language','跟随用户输入':'Follow user input','待确认':'Pending review','已启用':'Approved','评价 1–10':'Score 1–10','概述':'Summary','分析':'Analysis','原文证据':'Evidence','本机 Ollama':'Local Ollama','通用对话':'General chat','代码开发':'Coding','均衡':'Balanced','速度优先':'Speed first','质量优先':'Quality first','确定':'OK','取消':'Cancel','保存':'Save','关闭':'Close','是':'Yes','否':'No','◫   部署工作台':'◫   Deployment','▦   模型中心':'▦   Models','◌   本地对话':'◌   Local chat','⌘   API 接入':'⌘   API access','≡   运行日志':'≡   Logs','◌   聊天主页':'◌   Chat','✧   人格工作室':'✧   Personalities','▤   记忆与用户':'▤   Memory & you','◇   黑话学习':'◇   Slang lab','⌘   连接设置':'⌘   Connections'}
+    override={'你':'You','助手':'Assistant','助手 · 正在生成':'Assistant · generating','助手 · 已中断':'Assistant · interrupted','你 · 已中断':'You · interrupted','简体中文':'简体中文','界面语言':'Interface language','AI 回复语言':'AI reply language','跟随用户输入':'Follow user input','待确认':'Pending review','已启用':'Approved','评价 1–10':'Score 1–10','概述':'Summary','分析':'Analysis','原文证据':'Evidence','本机 Ollama':'Local Ollama','通用对话':'General chat','代码开发':'Coding','均衡':'Balanced','速度优先':'Speed first','质量优先':'Quality first','确定':'OK','取消':'Cancel','保存':'Save','关闭':'Close','是':'Yes','否':'No','◫   部署工作台':'◫   Deployment','▦   模型中心':'▦   Models','◌   本地对话':'◌   Local chat','⌘   API 接入':'⌘   API access','≡   运行日志':'≡   Logs','◌   聊天主页':'◌   Chat','✧   人格工作室':'✧   Personalities','▤   记忆与用户':'▤   Memory and you','◇   黑话学习':'◇   Slang lab','⌘   连接设置':'⌘   Connections'}
     existing.update(override)
     todo=sorted(set().union(*roots.values())-existing.keys())
     print(f'{len(todo)} new UI strings, {sum(map(len,roots.values()))} per-app entries',flush=True)

@@ -196,6 +196,7 @@
   "运行环境安装未完成，请使用官网安装程序后重试。": "Runtime environment installation incomplete. Please use the official installer and try again.",
   "运行环境已下载 ": "Runtime environment downloaded ",
   "运行环境已下载 {0} MiB": "Runtime environment downloaded {0} MiB",
+  "运行约需": "Estimated runtime:",
   "选择后用于本地对话和 API 示例。模型文件保留在 Ollama 的模型目录。": "Used for local chat and API examples. Model files remain in Ollama's model directory.",
   "选择模型": "Select Model",
   "通用对话": "General chat",
@@ -207,11 +208,11 @@
   "部署完成，模型可通过本地 API 调用。": "Deployment complete. The model can be called via local API.",
   "配置可能不足": "Configuration may be insufficient",
   "集成显卡或未知显存不叠加到内存；AMD / Intel 加速由 Ollama 实际检测。": "Integrated graphics or unknown VRAM is not added to RAM; AMD/Intel acceleration is detected by Ollama.",
+  "预算": "Budget",
   "预算 ": "Budget",
   "首次部署会下载运行环境及模型文件，请保持网络连接。": "First deployment downloads runtime and model files. Keep network connected.",
   "验证 API 调用": "Verify API Call",
   "高质量编程任务，适合高配置电脑。": "High-quality coding tasks, suitable for high-spec computers.",
-  "▤   记忆与用户": "▤   Memory and you",
-  "v{0} · OpenAI Codex 协作": "v{0} · Codex-assisted",
-  "知识参考：YYDS · 已确认词条": "Knowledge: YYDS · approved term"
+  "知识参考：YYDS · 已确认词条": "Knowledge: YYDS · approved term",
+  "●  本地模型已连接 · 演示数据": "● Local model connected · demo"
 }
