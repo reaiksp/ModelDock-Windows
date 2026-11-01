@@ -34,9 +34,9 @@ The initial runtime and model downloads require internet access and sufficient d
 
 The catalog includes Qwen 3 general-purpose text models and Qwen 2.5 Coder models. Recommendations account for available system memory, confirmed free NVIDIA VRAM, and free space on the model drive.
 
-System memory reserves at least 3 GiB or 20% of total RAM; VRAM reserves at least 1 GiB or 12%. RAM and VRAM are not simply added together. Multiple GPUs are evaluated conservatively using the largest single-card free-memory value. CPU balanced/speed recommendations favor smaller models.
+System memory reserves at least 3 GiB or 20% of total RAM; VRAM reserves at least 1 GiB or 12%. RAM and VRAM are not simply added together. The first NVIDIA GPU is used to match MDC local speech on CUDA 0. CPU balanced/speed recommendations favor smaller models.
 
-Memory estimates assume default quantization and a 4K context. Actual requirements vary with model versions, drivers, context and background applications. A recommendation is an estimate; successful loading is the final check. When independent VRAM cannot be confirmed, including some AMD/Intel configurations, the app uses a conservative system-memory estimate. Ollama decides which acceleration is available.
+Base estimates assume default quantization at 4K; longer-context mode reserves additional space for 16K. Actual requirements vary with model versions, drivers, context and background applications. A recommendation is an estimate; successful loading is the final check. When independent VRAM cannot be confirmed, including some AMD/Intel configurations, the app uses a conservative system-memory estimate. Ollama decides which acceleration is available.
 
 ## Local APIs
 
