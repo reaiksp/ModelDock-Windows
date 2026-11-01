@@ -33,27 +33,36 @@ class Recommendation:
     model: Model | None
     reason: str
     mode: str
+    context: int = 4096
 
 
 def recommend(ram: float, available: float, vram: float, disk: float,
-              usage: str = "通用对话", preference: str = "均衡") -> Recommendation:
+              usage: str = "通用对话", preference: str = "均衡", profile="large", voice="off") -> Recommendation:
     # GPU memory and system RAM are deliberately not added together.
     ram_budget = max(0, min(ram - max(3.0, ram * .20), available - 1.0))
     gpu_budget = max(0, vram - max(1.0, vram * .12))
+    context = 16384 if profile == "context" else 4096
+    extra = 4.0 if context > 4096 else 0.0
+    reserves = {"0.6B": (4.0, 4.0), "1.7B": (7.0, 5.0)}
+    vg, vr = reserves.get(voice, (0.0, 0.0))
+    if vg and (gpu_budget < vg + 1.6 or ram_budget < vr + 2):
+        return Recommendation(None, "语音与文字同时运行资源不足。", "GPU", context)
+    gpu_budget -= vg
+    ram_budget -= vr
     gpu = gpu_budget >= 1.6 and ram_budget >= 2
     budget = gpu_budget if gpu else ram_budget
     # Keep CPU-only defaults responsive; quality preference may choose larger models.
     if not gpu and preference != "质量优先":
-        budget = min(budget, 5.0 if preference == "均衡" else 3.2)
+        budget = min(budget, (5.0 if preference == "均衡" else 3.2) + extra)
     candidates = [m for m in CATALOG if m.specialty == usage
-                  and m.memory <= budget and disk >= m.size * 1.15 + 1]
+                  and m.memory + extra <= budget and disk >= m.size * 1.15 + 1]
     mode = "GPU 优先（兼容性以实际加载为准）" if gpu else "CPU / 内存推理"
     if not candidates:
-        return Recommendation(None, "可用内存、显存或磁盘不足。请关闭其他程序、释放存储后重新检测。", mode)
+        return Recommendation(None, "可用内存、显存或磁盘不足。请关闭其他程序、释放存储后重新检测。", mode, context)
     model = candidates[-1]
     if preference == "速度优先" and len(candidates) > 1:
         model = candidates[max(0, len(candidates) - 2)]
     reason = (f"按 4K 上下文估算，运行约需 {model.memory:g} GiB；"
               f"{'显存' if gpu else '内存'}预算 {budget:.1f} GiB，"
               f"下载约 {model.size:.1f} GiB。已预留系统与下载余量。")
-    return Recommendation(model, reason, mode)
+    return Recommendation(model, reason + (" 16K 上下文额外预留 4 GiB。" if extra else "") + (" 已为本地语音预留资源。" if vg else ""), mode, context)

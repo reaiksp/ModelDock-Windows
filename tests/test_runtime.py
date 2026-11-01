@@ -109,3 +109,21 @@ def test_cancel_terminates_cli_child(monkeypatch):
         runtime.pull("qwen3:0.6b", task, lambda t: None, lambda v, t: None)
     cancel.join()
     assert children[0].poll() is not None
+
+
+def test_warmup_verifies_context_and_sends_selected_budget(monkeypatch):
+    import modeldock.runtime as runtime
+    calls=[]
+    def request(path,body=None,**kwargs):
+        calls.append((path,body))
+        return {"model_info":{"qwen3.context_length":32768}} if path=="/api/show" else {"done":True}
+    monkeypatch.setattr(runtime,"request",request)
+    assert runtime.warmup("demo",runtime.Task(),lambda text:None,16384)=="demo"
+    assert calls[-1][1]["options"]["num_ctx"]==16384
+
+
+def test_unconfirmed_long_context_does_not_persist_success(monkeypatch):
+    import modeldock.runtime as runtime
+    import pytest
+    monkeypatch.setattr(runtime,"request",lambda *args,**kwargs:{})
+    with pytest.raises(RuntimeError):runtime.warmup("demo",runtime.Task(),lambda text:None,16384)

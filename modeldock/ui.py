@@ -4,8 +4,8 @@ import threading
 import time
 from dataclasses import asdict
 
-from PySide6.QtCore import QObject, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
+from PySide6.QtCore import QObject, Qt, QTimer, QUrl, Signal
+from PySide6.QtGui import QColor, QDesktopServices, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QDoubleSpinBox, QFrame, QGridLayout, QHBoxLayout,
     QLabel, QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton,
@@ -288,6 +288,23 @@ class Window(QMainWindow):
         self.preference.setCurrentText(self.settings.get("preference", "均衡"))
         config.addWidget(self.preference, 1)
         box.addLayout(config)
+        row = QHBoxLayout()
+        self.capacity = QComboBox()
+        for title, value in [("大体量 · 4K 上下文", "large"), ("大上下文 · 16K", "context")]:
+            self.capacity.addItem(title, value)
+        self.capacity.setCurrentIndex(max(0,self.capacity.findData(self.settings.get("capacity","large"))))
+        row.addWidget(self.capacity)
+        self.voice_budget = QComboBox()
+        for title, value in [("不开语音 / API 语音", "off"), ("本地语音 0.6B", "0.6B"), ("本地语音 1.7B", "1.7B")]:
+            self.voice_budget.addItem(title,value)
+        self.voice_budget.setCurrentIndex(max(0,self.voice_budget.findData(self.settings.get("voice_budget","off"))))
+        row.addWidget(self.voice_budget)
+        box.addLayout(row)
+        self.plan_comparison = label("", "muted", True)
+        box.addWidget(self.plan_comparison)
+        box.addWidget(button("打开配套聊天 MDC ↗", lambda: QDesktopServices.openUrl(QUrl("https://github.com/reaiksp/ModelDock-Chat"))))
+        self.capacity.currentIndexChanged.connect(self.update_recommendation)
+        self.voice_budget.currentIndexChanged.connect(self.update_recommendation)
         self.usage.currentTextChanged.connect(self.update_recommendation)
         self.preference.currentTextChanged.connect(self.update_recommendation)
         frame, hero = card("hero")
@@ -360,7 +377,14 @@ class Window(QMainWindow):
         if not self.hw:
             return
         self.rec = recommend(self.hw.ram, self.hw.available, self.hw.vram, self.hw.disk,
-                             source_text(self.usage), source_text(self.preference))
+                             source_text(self.usage), source_text(self.preference), self.capacity.currentData(), self.voice_budget.currentData())
+        comparisons = []
+        for title, profile in [(tr("大体量"), "large"), (tr("大上下文"), "context")]:
+            plan = recommend(self.hw.ram,self.hw.available,self.hw.vram,self.hw.disk,source_text(self.usage),source_text(self.preference),profile,self.voice_budget.currentData())
+            comparisons.append(f"{title}: {plan.model.title if plan.model else tr('资源不足')} / {plan.context}")
+        self.plan_comparison.setText("\n".join(comparisons))
+        self.rec_badge.setText(f"{self.rec.context} tokens")
+        self.settings.update(capacity=self.capacity.currentData(), voice_budget=self.voice_budget.currentData())
         self.rec_title.setText(self.rec.model.title if self.rec.model else "暂时没有安全的推荐")
         self.rec_reason.setText(self.rec.reason)
         self.rec_mode.setText(self.rec.mode)
@@ -398,7 +422,7 @@ class Window(QMainWindow):
             col.addWidget(label(model.title, "section"))
             col.addWidget(label(model.description, "muted", True))
             col.addWidget(label(f"4K 运行预算 ≈ {model.memory:g} GiB", "muted"))
-            btn = button("下载并部署", lambda checked=False, m=model: self.start_deploy(m.tag, m.size, m.memory))
+            btn = button("下载并部署", lambda checked=False, m=model: self.start_deploy(m.tag, m.size, m.memory, self.rec.context, self.capacity.currentData(), self.voice_budget.currentData()))
             col.addWidget(btn)
             self.model_buttons.append(btn)
             grid.addWidget(frame, index // 2, index % 2)
@@ -444,9 +468,9 @@ class Window(QMainWindow):
     def deploy_recommended(self):
         if self.hw and self.rec.model:
             m = self.rec.model
-            self.start_deploy(m.tag, m.size, m.memory)
+            self.start_deploy(m.tag, m.size, m.memory, self.rec.context, self.capacity.currentData(), self.voice_budget.currentData())
 
-    def start_deploy(self, tag, size, memory):
+    def start_deploy(self, tag, size, memory, context=4096, profile="large", voice="off"):
         if self.operation:
             return
         if self.chat_job:
@@ -467,7 +491,8 @@ class Window(QMainWindow):
                 return
         self.navigate(0)
         self.task_title.setText(f"03  /  正在部署 {tag}")
-        self.begin_operation(lambda j: runtime.one_click(tag, j.task, j.log.emit, j.progress.emit), self.deployed)
+        self.pending_plan = dict(model=tag, context=context, capacity=profile, voice=voice)
+        self.begin_operation(lambda j: runtime.one_click(tag, j.task, j.log.emit, j.progress.emit, context), self.deployed)
 
     def begin_operation(self, fn, success):
         if self.operation:
@@ -513,6 +538,7 @@ class Window(QMainWindow):
     def deployed(self, tag):
         self.clear_chat()
         self.active_model = tag
+        self.settings.setdefault("model_plans", {})[tag] = dict(self.pending_plan)
         self.task_title.setText("03  /  部署完成 ✓")
         self.task_detail.setText(f"{tag} 已加载。前往“本地对话”体验，或复制 API 示例开始接入。")
         self.progress.setRange(0, 100)
@@ -541,7 +567,7 @@ class Window(QMainWindow):
         self.transcript.setPlainText("你好！部署或选择一个本地模型，然后发送第一条消息。")
         box.addWidget(self.transcript, 1)
         self.prompt = QPlainTextEdit()
-        self.prompt.setPlaceholderText("输入消息…（点击发送；上下文预算为 4K）")
+        self.prompt.setPlaceholderText("输入消息…（上下文按所选部署方案配置）")
         self.prompt.setMaximumHeight(100)
         box.addWidget(self.prompt)
         row = QHBoxLayout()
@@ -595,7 +621,7 @@ class Window(QMainWindow):
         self.stop_chat_button.setEnabled(True)
         self.chat_status.setText("正在本机生成…首次加载可能较慢")
         snapshot = [dict(m) for m in self.messages[-20:]]
-        self.chat_job = self.launch(lambda j: runtime.stream_chat(self.active_model, snapshot, j.task, j.token.emit, self.settings.get("response_language","auto")),
+        self.chat_job = self.launch(lambda j: runtime.stream_chat(self.active_model, snapshot, j.task, j.token.emit, self.settings.get("response_language","auto"), self.settings.get("model_plans",{}).get(self.active_model,{}).get("context",4096)),
                                     self.chat_complete, self.chat_failed)
         self.chat_job.token.connect(self.receive_token)
         self.chat_job.finished.connect(self.chat_finished)

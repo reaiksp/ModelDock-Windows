@@ -1,5 +1,7 @@
 # ModelDock
 
+配套聊天：[ModelDock Chat（MDC）](https://github.com/reaiksp/ModelDock-Chat) · 人格、记忆、黑话与语音。
+
 **简体中文** | [English](README.en.md)
 
 面向 Windows 10 22H2 / Windows 11 x64 的本地文字模型桌面软件。界面使用 PySide6，推理由 Ollama 命令行运行环境提供。版本：0.2.0。
@@ -115,3 +117,15 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1
 ## 源码结构
 
 `main.py` 为入口；`modeldock/ui.py` 为桌面界面与任务调度；`system.py` 为硬件与路径检测；`catalog.py` 为模型目录与推荐规则；`runtime.py` 为 CLI / HTTP 集成；`tests/` 为推荐与协议测试；`tools/` 为预览、真实联调和打包辅助脚本。
+
+## 两种容量模式 / Two capacity modes
+
+“大体量”以 4K 上下文优先选择可容纳的较大 Q4 文字模型；“大上下文”使用 16K，额外预留 4 GiB 上下文预算，通常选择更轻的模型。该余量是保守估算，不是精确 KV cache 计算或速度承诺；实际以上下文元数据和成功加载为准。资源不足不会假称可用。超出目录上限或低配置时不保证两种模式一定选出不同标签。
+
+开启本地 0.6B / 1.7B 语音时，分别预留 4 / 7 GiB 显存及 4 / 5 GiB 内存。云端语音不计本地模型预算。模型权重不因模式改变，模式配置影响推荐和上下文。
+
+MD 成功部署后按模型保存方案。MDC“连接设置 → 应用 MD 部署方案”可显式导入模型、上下文与语音预算；不改写用户输入、人格或 API 密钥。MDC 按模型记住上下文，仍用模型元数据限制实际值。导入语音预算不代表语音模型已安装，需在语音页安装并启动服务。
+
+[语音录音、克隆与训练支持核对](docs/SPEECH_CAPABILITIES.md)。
+
+English: Larger-model mode prioritizes model size at 4K. Longer-context mode reserves an additional 4 GiB at 16K and typically recommends a smaller model. Both reserve local speech resources. These are planning estimates, not exact memory guarantees. MDC explicitly imports successful MD plans and clamps context to model metadata. Importing a speech budget does not install the speech model. User content and API credentials are preserved.

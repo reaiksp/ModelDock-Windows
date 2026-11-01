@@ -177,22 +177,26 @@ def pull(tag, task, log, progress):
         task.process = None
 
 
-def warmup(tag, task, log):
+def warmup(tag, task, log, context=4096):
+    info = request("/api/show", {"model":tag}, task=task)
+    limits = [int(v) for k,v in info.get("model_info",{}).items() if k.endswith(".context_length") and isinstance(v,(int,float))]
+    if context > (min(limits) if limits else 4096):
+        raise RuntimeError("模型元数据不能确认所选上下文；请使用较小上下文。")
     log("加载模型并验证推理接口…")
     result = request("/api/generate", {"model": tag, "prompt": "", "stream": False,
-                     "keep_alive": "5m", "options": {"num_ctx": 4096}}, timeout=180, task=task)
+                     "keep_alive": "5m", "options": {"num_ctx": context}}, timeout=180, task=task)
     if not result.get("done"):
         raise RuntimeError("模型加载未完成，请在本地对话中重试。")
     log("部署完成，模型可通过本地 API 调用。")
     return tag
 
 
-def deploy(tag, task, log, progress):
+def deploy(tag, task, log, progress, context=4096):
     pull(tag, task, log, progress)
-    return warmup(tag, task, log)
+    return warmup(tag, task, log, context)
 
 
-def stream_chat(tag, messages, task, emit, response_language="auto"):
+def stream_chat(tag, messages, task, emit, response_language="auto", context=4096):
     task.check()
     messages = [dict(m) for m in messages]
     for message in reversed(messages):
@@ -203,7 +207,7 @@ def stream_chat(tag, messages, task, emit, response_language="auto"):
     task.connection = conn
     try:
         conn.request("POST", "/api/chat", json.dumps({"model": tag, "messages": [{"role":"system","content":response_policy(response_language)}] + messages,
-                     "stream": True, "think": False, "options": {"num_ctx": 4096}}).encode(),
+                     "stream": True, "think": False, "options": {"num_ctx": context}}).encode(),
                      {"Content-Type": "application/json"})
         response = conn.getresponse()
         if response.status >= 400:
@@ -287,7 +291,7 @@ def install_runtime(task, log, progress):
         partial.unlink(missing_ok=True)
 
 
-def one_click(tag, task, log, progress):
+def one_click(tag, task, log, progress, context=4096):
     if not find_ollama():
         install_runtime(task, log, progress)
-    return deploy(tag, task, log, progress)
+    return deploy(tag, task, log, progress, context)

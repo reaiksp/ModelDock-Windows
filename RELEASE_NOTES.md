@@ -1,3 +1,12 @@
+# 0.3.0 容量模式与语音兼容更新
+
+- 大上下文 / 大体量两种资源推荐。
+- 为本地语音预留资源，保留 API 选择与原始用户资料。
+- 按模型保存上下文，MDC 显式导入 MD 成功部署方案。
+- 语音克隆与训练支持核对说明（本次未实现音频上传）。
+
+配套项目：[MDC](https://github.com/reaiksp/ModelDock-Chat) · [MD](https://github.com/reaiksp/ModelDock-Windows)
+
 # ModelDock 0.2.0 · Windows x64 测试版
 
 - 应用内即时切换简体中文 / English，并保存界面语言偏好。

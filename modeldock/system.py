@@ -83,9 +83,9 @@ def detect():
             for row in rows.splitlines():
                 name, total, free = [v.strip() for v in row.rsplit(",", 2)]
                 cards.append((float(free) / 1024, name, float(total) / 1024))
-            vram, name, total = max(cards)
+            vram, name, total = cards[0]
             gpu = f"{name} · {total:.0f} GiB"
-            notes.append("独立显存按空闲值计算，多显卡取单卡最大值。")
+            notes.append("独立显存按 NVIDIA 首卡空闲值计算，与本地语音 CUDA 0 保持一致。")
         except (ValueError, RuntimeError, subprocess.TimeoutExpired):
             notes.append("NVIDIA 显存读取失败，使用保守的内存推荐。")
     if os.name == "nt":

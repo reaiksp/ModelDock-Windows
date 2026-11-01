@@ -46,3 +46,18 @@ def test_selected_model_fits_memory_and_disk(ram, available, vram, disk):
     assert result.model
     assert result.model.size * 1.15 + 1 <= disk
     assert result.model.memory <= max(vram - max(1, vram * .12), min(ram - max(3, ram * .2), available - 1))
+
+
+@pytest.mark.parametrize("voice", ["off", "0.6B", "1.7B"])
+def test_capacity_modes_reserve_context_and_voice(voice):
+    large=recommend(32,25,16,100,preference="质量优先",profile="large",voice=voice)
+    long=recommend(32,25,16,100,preference="质量优先",profile="context",voice=voice)
+    assert large.model and long.model
+    assert large.context==4096 and long.context==16384
+    assert long.model.size < large.model.size
+    reserve={"off":0,"0.6B":4,"1.7B":7}[voice]
+    assert long.model.memory+4+reserve<=16-16*.12
+
+
+def test_voice_cannot_be_promised_without_gpu_budget():
+    assert recommend(32,25,0,100,voice="1.7B").model is None
