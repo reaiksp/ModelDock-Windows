@@ -25,7 +25,7 @@ def test_legacy_intermediate_quants_are_manual_only_with_new_slider():
     assert plan(5).model.quant == "BF16"
 
 
-@pytest.mark.parametrize("demand,context,reserve", [(1,4096,0),(2,4096,0),(3,8192,1.5),(4,16384,4),(5,32768,8)])
+@pytest.mark.parametrize("demand,context,reserve", [(1,2048,0),(2,4096,0),(3,6144,.75),(4,8192,1.5),(5,10240,2.125)])
 def test_conversation_demand_keeps_requested_context(demand, context, reserve):
     result = plan(5, demand)
     assert result.context == context and result.conversation_demand == demand
@@ -46,12 +46,12 @@ def test_less_vram_or_more_context_cannot_raise_grade():
 
 def test_fallback_is_explicit_and_never_shrinks_context():
     result = plan(5, demand=4, vram=24, voice="1.7B")
-    assert result.model.quant == "IQ2_XS"
-    assert result.compression_level == 5 and result.effective_compression_level == 1 and result.fallback
-    assert result.context == 16384 and "目标 5 档，推荐 1 档" in result.reason
+    assert result.model.quant == "IQ3_XXS"
+    assert result.compression_level == 5 and result.effective_compression_level == 2 and result.fallback
+    assert result.context == 8192 and "目标 5 档，推荐 2 档" in result.reason
     assert "对话需求不变" in result.reason
-    result = plan(5, demand=5, vram=16)
-    assert result.model is None and result.context == 32768 and result.effective_compression_level is None
+    result = plan(5, demand=5, vram=12)
+    assert result.model is None and result.context == 10240 and result.effective_compression_level is None
 
 
 @pytest.mark.parametrize("voice,reserve", [("off",0),("0.6B",4),("1.7B",7)])
@@ -78,7 +78,7 @@ def test_host_ram_voice_and_cpu_preference_are_still_hard_constraints():
 
 def test_generic_use_ignores_precision_but_applies_conversation_demand():
     result = recommend(128,110,96,500,"代码开发",compression_level=5,conversation_demand=3)
-    assert result.model.specialty == "代码开发" and result.context == 8192
+    assert result.model.specialty == "代码开发" and result.context == 6144
     assert result.compression_level is None and result.effective_compression_level is None
 
 

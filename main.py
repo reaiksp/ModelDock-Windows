@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtCore import QTimer
 
 from modeldock.system import DATA_DIR
+from modeldock.context_levels import CONVERSATION_CONTEXTS
 from modeldock.ui import STYLE, Window
 
 
@@ -38,6 +39,7 @@ def main():
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(json.dumps({"startup": "passed", "frozen": bool(getattr(sys, "frozen", False)),
                 "pages": window.stack.count(), "english_ui": "Deployment" in window.nav[0].text(), "hardware_detected": window.hw is not None,
+                "context_levels": list(CONVERSATION_CONTEXTS.values()),
                 "compression_steps": [window.compression_slider.minimum(), window.compression_slider.maximum()],
                 "conversation_steps": [window.conversation_slider.minimum(), window.conversation_slider.maximum()],
                 "explicit_download_control": bool(window.deploy_button.text()),

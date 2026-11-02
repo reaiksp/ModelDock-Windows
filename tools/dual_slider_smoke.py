@@ -53,7 +53,7 @@ def check():
         assert window.compression_slider.minimum() == window.conversation_slider.minimum() == 1
         assert window.compression_slider.maximum() == window.conversation_slider.maximum() == 5
         assert window.compression_slider.value() == 3  # invalid bool does not become level one
-        assert window.conversation_slider.value() == 4  # legacy 16K migration
+        assert window.conversation_slider.value() == 5  # legacy16K requirement maps to the new maximum; active plans stay unchanged
         assert window.capacity.isHidden()
         assert (window.parameter_slider.minimum(), window.parameter_slider.maximum()) == (1, 96)
         for step in range(1, 97):
@@ -70,12 +70,12 @@ def check():
         assert window.active_model == "existing:latest"
         assert window.prompt.toPlainText() == "保持我的原始输入与偏好。"
         assert saved[-1]["compression_level"] == saved[-1]["conversation_demand"] == 5
-        assert window.rec.context == 32768 and len(window.grade_availability) == 5
+        assert window.rec.context == 10240 and len(window.grade_availability) == 5
         result["drag_only_recommends"] = True
         window.voice_budget.setCurrentIndex(window.voice_budget.findData("1.7B"))
         window.conversation_slider.setValue(4)
-        assert window.rec.compression_level == 5 and window.rec.effective_compression_level == 1
-        assert window.rec.fallback and window.rec.context == 16384
+        assert window.rec.compression_level == 5 and window.rec.effective_compression_level == 2
+        assert window.rec.fallback and window.rec.context == 8192
         assert window.compression_slider.value() == 5
         result["requested_and_effective_grade_separate"] = True
         window.usage.setCurrentText("通用对话")
@@ -118,13 +118,13 @@ def check():
         window.deploy_recommended()
         assert not window.settings.get("model_plans")
         assert window.pending_plan["compression_level"] == 5
-        assert window.pending_plan["effective_compression_level"] == 1
+        assert window.pending_plan["effective_compression_level"] == 2
         assert window.pending_plan["conversation_demand"] == 4
         window.deployed(selected.tag.casefold())
         plan = window.settings["model_plans"][selected.tag.casefold()]
-        assert plan["context"] == 16384 and plan["usage"] == "压缩大模型"
-        assert plan["compression_level"] == 5 and plan["effective_compression_level"] == 1
-        assert plan["family"] == "Qwen3.8-27B" and plan["quant"] == "IQ2_XS"
+        assert plan["context"] == 8192 and plan["usage"] == "压缩大模型"
+        assert plan["compression_level"] == 5 and plan["effective_compression_level"] == 2
+        assert plan["family"] == "Qwen3.8-27B" and plan["quant"] == "IQ3_XXS"
         result["simulated_success_records_actual_plan"] = True
         result["status"] = "passed"
     except Exception as exc:

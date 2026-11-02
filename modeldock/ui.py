@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 
 from . import __version__, runtime
 from .parameters import parameter_size, saved_parameter
+from .context_levels import saved_conversation, demand_for_context
 from .catalog import PARAMETER_SIZES
 from .catalog import CATALOG, COMPRESSION_LEVELS, CONVERSATION_LEVELS, deployment_disk, fits_model, recommend
 from .i18n import LanguageManager, SOURCE_ROLE, source_text, tr
@@ -350,7 +351,7 @@ class Window(QMainWindow):
         self.conversation_slider.setPageStep(1)
         self.conversation_slider.setTickInterval(1)
         self.conversation_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.conversation_slider.setValue(self.saved_level("conversation_demand", 4 if self.settings.get("capacity") == "context" else 2))
+        self.conversation_slider.setValue(saved_conversation(self.settings))
         sliders.addWidget(self.conversation_slider)
         self.conversation_label = label("", "muted", True)
         self.conversation_label.setProperty('_i18n_skip', True)
@@ -478,8 +479,8 @@ class Window(QMainWindow):
 
     def update_recommendation(self):
         level, demand = self.compression_slider.value(), self.conversation_slider.value()
-        self.settings.update(parameter_limit=self.parameter_slider.value() / 2, compression_level=level, conversation_demand=demand, voice_budget=self.voice_budget.currentData())
-        legacy = "context" if CONVERSATION_LEVELS[demand][1] >= 16384 else "large"
+        self.settings.update(conversation_scale=2, parameter_limit=self.parameter_slider.value() / 2, compression_level=level, conversation_demand=demand, voice_budget=self.voice_budget.currentData())
+        legacy = "context" if CONVERSATION_LEVELS[demand][1] >= 8192 else "large"
         blocked = self.capacity.blockSignals(True)
         self.capacity.setCurrentIndex(self.capacity.findData(legacy))
         self.capacity.blockSignals(blocked)
@@ -650,9 +651,9 @@ class Window(QMainWindow):
         self.task_title.setText(f"03  /  正在部署 {tag}")
         demand = self.conversation_slider.value()
         if CONVERSATION_LEVELS[demand][1] != context:
-            demand = {4096: 2, 8192: 3, 16384: 4, 32768: 5}.get(context, demand)
+            demand = demand_for_context(context)
         self.pending_plan = dict(model=tag, context=context, capacity=profile, voice=voice,
-            conversation_demand=demand, usage=model.specialty if model else source_text(self.usage),
+            conversation_demand=demand, conversation_scale=2, usage=model.specialty if model else source_text(self.usage),
             compression_level=self.compression_slider.value() if model and model.specialty == "压缩大模型" else None,
             effective_compression_level=(model.compression_level or None) if model else None,
             family=model.family if model else "", quant=model.quant if model else "",

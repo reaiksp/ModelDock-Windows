@@ -1,5 +1,6 @@
 """Conservative runtime estimates at 4096 context, in GiB; never model-size promises."""
 from dataclasses import dataclass, replace
+from .context_levels import context_reserve
 from .parameters import VARIANTS, parameter_size, download_gib, runtime_gib
 
 
@@ -75,16 +76,12 @@ COMPRESSION_LEVELS = {
     5: ("完全体", "F16 / BF16"),
 }
 CONVERSATION_LEVELS = {
-    1: ("短聊 · 基础记忆", 4096),
+    1: ("短聊 · 基础记忆", 2048),
     2: ("日常对话 · 常规记忆", 4096),
-    3: ("较长对话 · 加强检索", 8192),
-    4: ("长对话 · 详细摘要", 16384),
-    5: ("很长对话 · 优先保留细节", 32768),
+    3: ("较长对话 · 加强检索", 6144),
+    4: ("长对话 · 详细摘要", 8192),
+    5: ("很长对话 · 优先保留细节", 10240),
 }
-
-
-def context_reserve(context):
-    return 0.0 if context <= 4096 else 1.5 if context <= 8192 else 4.0 if context <= 16384 else 8.0
 
 
 def _level(value, name):

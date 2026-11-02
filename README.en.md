@@ -1,18 +1,20 @@
 # ModelDock
 
+上下文五档：2K / 4K / 6K / 8K / 10K；已部署方案保持原上下文。 / Context levels:2K /4K /6K /8K /10K. Existing deployed plans retain their context.
+
 New parameter-cap slider:0.5B–48B in0.5B steps, selecting corresponding quantized variants. [说明 / Details](docs/PARAMETER_RANGE.md)
 
 Companion chat: [ModelDock Chat (MDC)](https://github.com/reaiksp/ModelDock-Chat) — personas, memory, slang and local voice.
 
 [简体中文](README.md) | **English**
 
-ModelDock 0.5.1 is a Windows desktop app for deploying local text models through the Ollama CLI. It detects the user's hardware, recommends a model, downloads it, verifies loading, and provides local API examples.
+ModelDock 0.5.2 is a Windows desktop app for deploying local text models through the Ollama CLI. It detects the user's hardware, recommends a model, downloads it, verifies loading, and provides local API examples.
 
 Development assistance: **OpenAI Codex**. The initial application code and documentation were developed with Codex assistance.
 
 Repository: [ModelDock-Windows](https://github.com/reaiksp/ModelDock-Windows). For personalities, persistent conversations, memory and slang learning, use the independent companion [ModelDock Chat (MDC)](https://github.com/reaiksp/ModelDock-Chat). The two applications use separate repositories and data directories.
 
-## Two requirement sliders (0.5.1)
+## Two requirement sliders (0.5.2)
 
 The **Compressed large model** use case has two five-step sliders. **Dragging only updates recommendations and preferences. Downloads begin when the user clicks the deployment button or a model card's Download and deploy button.** Dragging never changes the active chat model.
 
@@ -24,7 +26,7 @@ The **Compressed large model** use case has two five-step sliders. **Dragging on
 | 4 | Q8_0 | 26.7 | 30.0 |
 | 5 | Full-precision BF16 text weights | 50.2 | 54.0 |
 
-The second slider selects **conversation length and memory requirements**: short/basic 4K, daily/standard 4K, longer/enhanced retrieval 8K, long/detailed summaries 16K, and very long/detail priority 32K. These are requirements, not measured memory accuracy. General chat and coding retain their existing catalogs; the precision slider is disabled for those use cases while the conversation slider remains available.
+The second slider selects **conversation length and memory requirements**: short/basic2K, daily/standard4K, longer/enhanced retrieval6K, long/detailed summaries8K, and detail priority10K. These are requirements, not measured memory accuracy. General chat and coding retain their existing catalogs; the precision slider is disabled for those use cases while the conversation slider remains available.
 
 Recommendations combine both choices with system headroom, available RAM, free VRAM, disk and the selected local speech budget. The highest feasible precision at or below the target is shown, with an explicit fallback explanation. Conversation requirements are never silently shortened. If no same-family model fits, no plan is offered. GPU and RAM are not added together. CPU large models require a deliberate Quality first preference and may generate very slowly.
 
@@ -117,6 +119,6 @@ This is an unsigned early test build. Clean Windows installation, driver coverag
 
 ## Legacy capacity settings and speech compatibility
 
-Existing larger-model (4K) settings migrate to demand level 2; longer-context (16K) settings migrate to level 4. Precision defaults to level 3. Existing plans remain compatible. Switching use cases or interface languages preserves slider values and original user text.
+Existing larger-model (4K) settings migrate to demand level 2; older16K preferences map to level5(10K), while existing deployed plans keep16K. Precision defaults to level 3. Existing plans remain compatible. Switching use cases or interface languages preserves slider values and original user text.
 
 Local 0.6B/1.7B speech reserves 4/7 GiB VRAM and 4/5 GiB RAM respectively. Cloud speech adds no local speech-model reserve. MDC clamps actual context to model metadata. Importing a speech budget does not install or start a speech model. User content and API credentials are preserved. See the [speech cloning and training capability audit](docs/SPEECH_CAPABILITIES.md).
