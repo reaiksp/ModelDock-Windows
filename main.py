@@ -38,6 +38,9 @@ def main():
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(json.dumps({"startup": "passed", "frozen": bool(getattr(sys, "frozen", False)),
                 "pages": window.stack.count(), "english_ui": "Deployment" in window.nav[0].text(), "hardware_detected": window.hw is not None,
+                "compression_steps": [window.compression_slider.minimum(), window.compression_slider.maximum()],
+                "conversation_steps": [window.conversation_slider.minimum(), window.conversation_slider.maximum()],
+                "explicit_download_control": bool(window.deploy_button.text()),
                 "models": [m.get("name") for m in window.models]}, ensure_ascii=False, indent=2), "utf-8")
             window.close()
             app.quit()

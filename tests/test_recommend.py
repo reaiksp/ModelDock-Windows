@@ -64,7 +64,7 @@ def test_voice_cannot_be_promised_without_gpu_budget():
 
 
 def test_compressed_catalog_retains_one_27b_family_and_exact_non_mtp_files():
-    models = [m for m in CATALOG if m.specialty == "压缩大模型"]
+    models = [m for m in CATALOG if m.method == "GSQ + RCO"]
     assert len(models) == 4
     assert {m.family for m in models} == {"Qwen3.8-27B"}
     assert {m.method for m in models} == {"GSQ + RCO"}
@@ -126,7 +126,7 @@ def test_original_default_chat_does_not_silently_change_to_compressed_family():
 
 
 def test_compressed_download_and_double_copy_disk_budget():
-    models = [m for m in CATALOG if m.specialty == "压缩大模型"]
+    models = [m for m in CATALOG if m.method == "GSQ + RCO"]
     assert [m.size for m in models] == [7.9, 8.7, 9.5, 11.0]
     model = models[0]
     enough_for_one = model.size * 1.15 + 1

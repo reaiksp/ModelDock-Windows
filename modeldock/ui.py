@@ -9,11 +9,11 @@ from PySide6.QtGui import QColor, QDesktopServices, QFont, QIcon, QPainter, QPix
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QDoubleSpinBox, QFrame, QGridLayout, QHBoxLayout,
     QLabel, QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton,
-    QScrollArea, QSizePolicy, QStackedWidget, QTabWidget, QTextEdit, QVBoxLayout, QWidget,
+    QScrollArea, QSizePolicy, QSlider, QStackedWidget, QTabWidget, QTextEdit, QVBoxLayout, QWidget,
 )
 
 from . import __version__, runtime
-from .catalog import CATALOG, deployment_disk, fits_model, recommend
+from .catalog import CATALOG, COMPRESSION_LEVELS, CONVERSATION_LEVELS, deployment_disk, fits_model, recommend
 from .i18n import LanguageManager, source_text, tr
 from .system import DATA_DIR, detect, disk_free, find_ollama, load_settings, save_settings
 
@@ -193,6 +193,7 @@ class Window(QMainWindow):
         self.language_combo.currentIndexChanged.connect(lambda: self.i18n.set_language(self.language_combo.currentData()))
         self.i18n.changed.connect(self.language_changed)
         self.i18n.apply()
+        self.refresh_slider_labels()
         self.navigate(0)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.refresh_service)
@@ -212,6 +213,10 @@ class Window(QMainWindow):
         blocked = self.language_combo.blockSignals(True)
         self.language_combo.setCurrentIndex(self.language_combo.findData(language))
         self.language_combo.blockSignals(blocked)
+        if self.hw:
+            self.update_recommendation()
+        else:
+            self.refresh_slider_labels()
         if self.messages or self.chat_job:
             self.render_chat()
 
@@ -294,16 +299,63 @@ class Window(QMainWindow):
             self.capacity.addItem(title, value)
         self.capacity.setCurrentIndex(max(0,self.capacity.findData(self.settings.get("capacity","large"))))
         row.addWidget(self.capacity)
+        self.capacity.hide()  # Legacy setting remains readable; the second slider controls new plans.
         self.voice_budget = QComboBox()
         for title, value in [("不开语音 / API 语音", "off"), ("本地语音 0.6B", "0.6B"), ("本地语音 1.7B", "1.7B")]:
             self.voice_budget.addItem(title,value)
         self.voice_budget.setCurrentIndex(max(0,self.voice_budget.findData(self.settings.get("voice_budget","off"))))
         row.addWidget(self.voice_budget)
         box.addLayout(row)
+        controls, sliders = card()
+        sliders.addWidget(label("精简与完全体 · 同一模型的五档精度", "section"))
+        ends = QHBoxLayout()
+        ends.addWidget(label("精简省资源", "muted"))
+        ends.addStretch()
+        ends.addWidget(label("BF16 完全体", "muted"))
+        sliders.addLayout(ends)
+        self.compression_slider = QSlider(Qt.Orientation.Horizontal)
+        self.compression_slider.setRange(1, 5)
+        self.compression_slider.setSingleStep(1)
+        self.compression_slider.setPageStep(1)
+        self.compression_slider.setTickInterval(1)
+        self.compression_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.compression_slider.setValue(self.saved_level("compression_level", 3))
+        sliders.addWidget(self.compression_slider)
+        self.compression_label = label("", "muted", True)
+        self.compression_label.setProperty('_i18n_skip', True)
+        sliders.addWidget(self.compression_label)
+        sliders.addWidget(label("对话长短与记忆需求", "section"))
+        ends = QHBoxLayout()
+        ends.addWidget(label("短聊 · 基础记忆", "muted"))
+        ends.addStretch()
+        ends.addWidget(label("长聊 · 记忆优先", "muted"))
+        sliders.addLayout(ends)
+        self.conversation_slider = QSlider(Qt.Orientation.Horizontal)
+        self.conversation_slider.setRange(1, 5)
+        self.conversation_slider.setSingleStep(1)
+        self.conversation_slider.setPageStep(1)
+        self.conversation_slider.setTickInterval(1)
+        self.conversation_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.conversation_slider.setValue(self.saved_level("conversation_demand", 4 if self.settings.get("capacity") == "context" else 2))
+        sliders.addWidget(self.conversation_slider)
+        self.conversation_label = label("", "muted", True)
+        self.conversation_label.setProperty('_i18n_skip', True)
+        sliders.addWidget(self.conversation_label)
+        self.grade_availability = []
+        self.compression_availability_button = button("查看五档可用性", self.toggle_grade_availability)
+        sliders.addWidget(self.compression_availability_button, alignment=Qt.AlignmentFlag.AlignLeft)
+        self.compression_availability = label("", "muted", True)
+        self.compression_availability.setProperty('_i18n_skip', True)
+        self.compression_availability.hide()
+        sliders.addWidget(self.compression_availability)
+        sliders.addWidget(label("拖动只分析推荐，不下载或切换模型。记忆需求影响上下文与资源预留，不保证记忆准确率。", "muted", True))
+        box.addWidget(controls)
         self.plan_comparison = label("", "muted", True)
         box.addWidget(self.plan_comparison)
         box.addWidget(button("打开配套聊天 MDC ↗", lambda: QDesktopServices.openUrl(QUrl("https://github.com/reaiksp/ModelDock-Chat"))))
         self.capacity.currentIndexChanged.connect(self.update_recommendation)
+        self.compression_slider.valueChanged.connect(self.update_recommendation)
+        self.conversation_slider.valueChanged.connect(self.update_recommendation)
         self.voice_budget.currentIndexChanged.connect(self.update_recommendation)
         self.usage.currentTextChanged.connect(self.update_recommendation)
         self.preference.currentTextChanged.connect(self.update_recommendation)
@@ -373,21 +425,61 @@ class Window(QMainWindow):
         self.detecting = False
         self.scan_button.setEnabled(True)
 
+    def saved_level(self, key, default):
+        value = self.settings.get(key, default)
+        return value if isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 5 else default
+
+    def toggle_grade_availability(self):
+        self.compression_availability.setVisible(not self.compression_availability.isVisible())
+
+    def refresh_slider_labels(self):
+        if not hasattr(self, "compression_slider"):
+            return
+        level = self.compression_slider.value()
+        title, quant = COMPRESSION_LEVELS[level]
+        applicable = source_text(self.usage) == "压缩大模型"
+        self.compression_slider.setEnabled(applicable and self.operation is None)
+        self.conversation_slider.setEnabled(self.operation is None)
+        self.compression_availability_button.setEnabled(applicable)
+        self.compression_label.setText(tr("目标 {0}/5 · {1} · {2}").format(level, tr(title), quant) if applicable else tr("此用途保持现有模型；精度五档仅适用于同一压缩大模型，选择已保留。"))
+        demand = self.conversation_slider.value()
+        title, context = CONVERSATION_LEVELS[demand]
+        self.conversation_label.setText(tr("需求 {0}/5 · {1} · {2} tokens").format(demand, tr(title), context))
+        self.compression_availability.setText("\n".join(
+            tr("{0} 档 · {1} · {2}").format(level, COMPRESSION_LEVELS[level][1], tr("可用" if available else "资源不足"))
+            for level, available in self.grade_availability) if self.grade_availability else tr("检测硬件并选择压缩大模型后显示五档可用性。"))
+
     def update_recommendation(self):
+        level, demand = self.compression_slider.value(), self.conversation_slider.value()
+        self.settings.update(compression_level=level, conversation_demand=demand, voice_budget=self.voice_budget.currentData())
+        legacy = "context" if CONVERSATION_LEVELS[demand][1] >= 16384 else "large"
+        blocked = self.capacity.blockSignals(True)
+        self.capacity.setCurrentIndex(self.capacity.findData(legacy))
+        self.capacity.blockSignals(blocked)
+        self.settings["capacity"] = legacy
+        self.refresh_slider_labels()
         if not self.hw:
+            self.persist()
             return
         self.rec = recommend(self.hw.ram, self.hw.available, self.hw.vram, self.hw.disk,
-                             source_text(self.usage), source_text(self.preference), self.capacity.currentData(), self.voice_budget.currentData())
+                             source_text(self.usage), source_text(self.preference), self.capacity.currentData(), self.voice_budget.currentData(), level, demand)
+        self.grade_availability = []
+        if source_text(self.usage) == "压缩大模型":
+            for item in range(1, 6):
+                choice = recommend(self.hw.ram, self.hw.available, self.hw.vram, self.hw.disk,
+                    "压缩大模型", source_text(self.preference), legacy, self.voice_budget.currentData(), item, demand)
+                self.grade_availability.append((item, choice.effective_compression_level == item))
+        self.refresh_slider_labels()
         comparisons = []
-        for title, profile in [("大体量", "large"), ("大上下文", "context")]:
-            plan = recommend(self.hw.ram,self.hw.available,self.hw.vram,self.hw.disk,source_text(self.usage),source_text(self.preference),profile,self.voice_budget.currentData())
+        for title, voice in [(tr("不开语音"), "off"), (tr("当前语音预算"), self.voice_budget.currentData())]:
+            plan = recommend(self.hw.ram,self.hw.available,self.hw.vram,self.hw.disk,source_text(self.usage),source_text(self.preference),legacy,voice,level,demand)
             comparisons.append(f"{title}: {plan.model.title if plan.model else tr('资源不足')} / {plan.context}")
         self.plan_comparison.setText("\n".join(comparisons))
         self.rec_badge.setText(f"{self.rec.context} tokens")
         self.settings.update(capacity=self.capacity.currentData(), voice_budget=self.voice_budget.currentData())
         self.rec_title.setText(self.rec.model.title if self.rec.model else "暂时没有安全的推荐")
-        self.rec_reason.setText(self.rec.reason)
-        self.rec_mode.setText(self.rec.mode)
+        self.rec_reason.setText(tr(self.rec.reason))
+        self.rec_mode.setText(tr(self.rec.mode))
         self.deploy_button.setEnabled(bool(self.rec.model) and self.operation is None)
         self.persist()
 
@@ -426,7 +518,7 @@ class Window(QMainWindow):
                 col.addWidget(label(f"{model.family} · {model.method} · {model.quant}", "muted", True))
                 col.addWidget(label("压缩导入需预留缓存与模型双份空间。", "muted", True))
                 col.addWidget(button("压缩模型来源与说明 ↗", lambda checked=False, url=model.source: QDesktopServices.openUrl(QUrl(url))))
-            btn = button("下载并部署", lambda checked=False, m=model: self.start_deploy(m.tag, m.size, m.memory, 16384 if self.capacity.currentData() == "context" else 4096, self.capacity.currentData(), self.voice_budget.currentData()))
+            btn = button("下载并部署", lambda checked=False, m=model: self.start_deploy(m.tag, m.size, m.memory, CONVERSATION_LEVELS[self.conversation_slider.value()][1], self.capacity.currentData(), self.voice_budget.currentData()))
             col.addWidget(btn)
             self.model_buttons.append(btn)
             grid.addWidget(frame, index // 2, index % 2)
@@ -529,7 +621,14 @@ class Window(QMainWindow):
             return
         self.navigate(0)
         self.task_title.setText(f"03  /  正在部署 {tag}")
-        self.pending_plan = dict(model=tag, context=context, capacity=profile, voice=voice)
+        demand = self.conversation_slider.value()
+        if CONVERSATION_LEVELS[demand][1] != context:
+            demand = {4096: 2, 8192: 3, 16384: 4, 32768: 5}.get(context, demand)
+        self.pending_plan = dict(model=tag, context=context, capacity=profile, voice=voice,
+            conversation_demand=demand, usage=model.specialty if model else source_text(self.usage),
+            compression_level=self.compression_slider.value() if model and model.specialty == "压缩大模型" else None,
+            effective_compression_level=(model.compression_level or None) if model else None,
+            family=model.family if model else "", quant=model.quant if model else "")
         self.begin_operation(lambda j: runtime.one_click(tag, j.task, j.log.emit, j.progress.emit, context), self.deployed)
 
     def begin_operation(self, fn, success):
@@ -540,6 +639,8 @@ class Window(QMainWindow):
         self.deploy_button.setEnabled(False)
         self.install_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
+        self.compression_slider.setEnabled(False)
+        self.conversation_slider.setEnabled(False)
         for btn in self.model_buttons:
             btn.setEnabled(False)
         def failed(message):

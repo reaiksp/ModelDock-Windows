@@ -1,3 +1,26 @@
+# ModelDock 0.5.0 · 双需求推荐条
+
+配套聊天：[MDC](https://github.com/reaiksp/ModelDock-Chat) · 部署工具：[MD](https://github.com/reaiksp/ModelDock-Windows)
+
+- 上方精度五档为同一 Qwen3.8-27B 的 IQ2_XS、IQ3_XXS、Q4_K_M、Q8_0 与真正 BF16 文字权重；旧 IQ2_S / IQ3_S 保留手动部署。
+- 下方对话与记忆需求五档为 4K / 4K / 8K / 16K / 32K，与本地语音、系统、显存及磁盘联合推荐。资源不足时明确显示推荐降档，不静默缩短对话需求，也不改用小参数模型。
+- 拖动仅推荐并保存偏好；保留用户主动点击下载按钮，不自动下载或切换当前模型。
+- 成功部署后保存目标档、实际档、对话需求、上下文及语音预算，供 MDC 显式导入。原始输入、人格、API 配置与旧方案额外字段保留。
+- 中英文界面与文档同步更新。详见[双需求与兼容策略](docs/DUAL_SLIDERS.md)。
+
+## 本次验证 / Validation
+
+- 88 项自动测试通过，原生进程正常退出；独立事件循环界面检查通过，覆盖拖动不下载、旧设置迁移、目标与实际档分离、语言切换保留原文、繁忙期间禁用滑条及模拟部署方案保存。
+- 打包后的独立程序启动与双滑条范围、主动下载入口检查通过；中英文切换后的布局、推荐对比和说明文字检查通过。
+- MD / MDC 共 2,025 组联合推荐结果一致，包含不同硬件、精度、对话需求及语音组合。
+- Q4 / Q8 / BF16 的上游固定版本、精确文件、大小、SHA-256 与 GGUF 文件头已核对，尚未全量下载或推理。
+- IQ2_XS 此前已通过真实 4K 加载、人格和记忆召回。本次 MDC 验证已确认记忆与黑话可共同保存到临时私有模型配置，候选排除、基础权重不变、测试快照已清理；当前内存／显存不足导致新生成召回试验未完成，不能据此宣称黑话学习质量或所有量化档的记忆准确率。
+- 记忆写入是默认系统提示持久化，不是训练模型权重，仍占上下文；语音并发、32K、不同显卡与纯 CPU 性能需要对应硬件验收。
+
+English: Two five-step requirement sliders combine same-27B precision, conversation/memory demand and local speech resources. Downloads remain user-initiated. 88 automated tests and a normal-exit native event-loop UI smoke passed. Q4/Q8/BF16 received pinned-source and metadata checks, not full inference. IQ2_XS approved-memory/slang configuration persistence passed in MDC; new generation/recall could not complete because available memory/VRAM was insufficient. Prompt persistence does not train model weights or guarantee memory accuracy.
+
+---
+
 # ModelDock 0.4.0 · 同参数大模型压缩实验
 
 - 新增“压缩大模型”用途：同一 Qwen3.8-27B GSQ-RCO 家族的 IQ2_XS / IQ2_S / IQ3_XXS / IQ3_S 精确 GGUF 文件，不以小参数模型替代。
