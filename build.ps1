@@ -8,8 +8,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'PyInstaller failed.' }
 & $Python tools\prepare_release.py
 if ($LASTEXITCODE -ne 0) { throw 'Preparing release failed.' }
-$zipPath = Join-Path $PSScriptRoot 'dist\ModelDock-0.5.2-windows-x64.zip'
+$zipPath = Join-Path $PSScriptRoot 'dist\ModelDock-0.5.3-windows-x64.zip'
 Compress-Archive -LiteralPath (Join-Path $PSScriptRoot 'dist\ModelDock') -DestinationPath $zipPath -Force
 $digest = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
-"$digest  ModelDock-0.5.2-windows-x64.zip" | Set-Content -LiteralPath "$zipPath.sha256" -Encoding ascii
+"$digest  ModelDock-0.5.3-windows-x64.zip" | Set-Content -LiteralPath "$zipPath.sha256" -Encoding ascii
 Write-Host "Release ready: $zipPath"

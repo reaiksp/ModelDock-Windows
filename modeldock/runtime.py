@@ -12,6 +12,7 @@ import urllib.request
 from pathlib import Path
 
 from .i18n import response_policy, adapt_user_message
+from .storage import check_server_directory
 from .system import DATA_DIR, FLAGS, command, find_ollama, model_dir
 
 HOST, PORT = "127.0.0.1", 11434
@@ -101,6 +102,7 @@ def cli_env():
 def ensure_server(task, log):
     task.check()
     if status():
+        check_server_directory()
         log("已连接本机 Ollama 服务。")
         return
     cli = find_ollama()

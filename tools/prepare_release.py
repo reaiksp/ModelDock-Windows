@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
-target = root / "dist/ModelDock"
+target = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else root / "dist/ModelDock"
 licenses = target / "licenses"
 licenses.mkdir(parents=True, exist_ok=True)
 for name in ["PySide6", "PySide6-Essentials", "shiboken6", "psutil", "pyinstaller"]:

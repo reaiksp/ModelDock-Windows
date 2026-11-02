@@ -7,12 +7,12 @@ from dataclasses import asdict
 from PySide6.QtCore import QObject, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
-    QApplication, QComboBox, QDoubleSpinBox, QFrame, QGridLayout, QHBoxLayout,
+    QApplication, QComboBox, QDoubleSpinBox, QFileDialog, QLineEdit, QFrame, QGridLayout, QHBoxLayout,
     QLabel, QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton,
     QScrollArea, QSizePolicy, QSlider, QStackedWidget, QTabWidget, QTextEdit, QVBoxLayout, QWidget,
 )
 
-from . import __version__, runtime
+from . import __version__, runtime, storage
 from .parameters import parameter_size, saved_parameter
 from .context_levels import saved_conversation, demand_for_context
 from .catalog import PARAMETER_SIZES
@@ -284,6 +284,17 @@ class Window(QMainWindow):
         box.addLayout(metrics)
         self.hardware_note = label("正在读取这台电脑的实际配置…", "muted", True)
         box.addWidget(self.hardware_note)
+        box.addWidget(label("模型存储目录", "section"))
+        storage_row = QHBoxLayout()
+        self.storage_path = QLineEdit(str(runtime.model_dir()))
+        storage_row.addWidget(self.storage_path, 1)
+        self.storage_choose = button("选择目录", self.choose_model_directory)
+        self.storage_apply = button("应用目录并重启服务", self.apply_model_directory)
+        storage_row.addWidget(self.storage_choose)
+        storage_row.addWidget(self.storage_apply)
+        box.addLayout(storage_row)
+        box.addWidget(label("先复制并校验已有模型，再重启本地服务；旧文件保留。MD与MDC共用文字模型目录，不移动聊天记录。", "muted", True))
+
         config = QHBoxLayout()
         config.addWidget(label("主要用途"))
         self.usage = QComboBox()
@@ -414,6 +425,23 @@ class Window(QMainWindow):
         box.addWidget(self.install_button, alignment=Qt.AlignmentFlag.AlignLeft)
         box.addWidget(label("常规模型经 Ollama CLI 下载；压缩大模型固定版本下载、校验后经 CLI 导入。体积与内存为估算，实际以加载结果为准。", "muted", True))
         box.addStretch()
+
+    def choose_model_directory(self):
+        path = QFileDialog.getExistingDirectory(self, tr("选择模型存储目录"), self.storage_path.text())
+        if path:
+            self.storage_path.setText(path)
+
+    def apply_model_directory(self):
+        if self.operation or self.chat_job:
+            self.error("请先停止聊天或下载，再应用模型目录。")
+            return
+        selected = self.storage_path.text().strip()
+        self.begin_operation(lambda job: storage.apply_text_directory(selected, job.task, job.log.emit), self.model_directory_applied)
+
+    def model_directory_applied(self, result):
+        self.storage_path.setText(str(runtime.model_dir()))
+        self.task_detail.setText(tr("模型目录已生效，旧模型副本保留；后续下载与缓存使用新目录。"))
+        self.scan()
 
     def scan(self):
         if self.detecting:
@@ -635,7 +663,7 @@ class Window(QMainWindow):
         model = next((m for m in CATALOG if runtime.model_key(m.tag) == runtime.model_key(tag)), None)
         required_disk = deployment_disk(model) if model else size * 1.15 + 1
         try:
-            free = disk_free(self.hw.models_path if self.hw else runtime.model_dir())
+            free = disk_free(runtime.model_dir())
             if free < required_disk:
                 raise RuntimeError(f"模型存储盘仅剩 {free:.1f} GiB，建议至少 {required_disk:.1f} GiB。")
         except OSError as exc:
@@ -665,6 +693,9 @@ class Window(QMainWindow):
             return
         self.progress.setRange(0, 0)
         self.task_detail.setText("正在准备，请稍候…")
+        self.storage_path.setEnabled(False)
+        self.storage_choose.setEnabled(False)
+        self.storage_apply.setEnabled(False)
         self.deploy_button.setEnabled(False)
         self.install_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
@@ -690,6 +721,9 @@ class Window(QMainWindow):
 
     def operation_finished(self):
         self.operation = None
+        self.storage_path.setEnabled(True)
+        self.storage_choose.setEnabled(True)
+        self.storage_apply.setEnabled(True)
         self.progress.setRange(0, 100)
         self.cancel_button.setEnabled(False)
         self.install_button.setEnabled(True)

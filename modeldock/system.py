@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import psutil
+from .storage import text_models_dir
 
 FLAGS = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
 DATA_DIR = Path(os.getenv("LOCALAPPDATA", str(Path.home() / ".local/share"))) / "ModelDock"
@@ -35,7 +36,7 @@ def user_env(name):
 
 
 def model_dir():
-    return Path(os.path.expandvars(user_env("OLLAMA_MODELS") or str(Path.home() / ".ollama/models")))
+    return text_models_dir()
 
 
 def disk_free(path):
