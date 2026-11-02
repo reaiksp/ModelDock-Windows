@@ -13,8 +13,10 @@ from PySide6.QtWidgets import (
 )
 
 from . import __version__, runtime
+from .parameters import parameter_size, saved_parameter
+from .catalog import PARAMETER_SIZES
 from .catalog import CATALOG, COMPRESSION_LEVELS, CONVERSATION_LEVELS, deployment_disk, fits_model, recommend
-from .i18n import LanguageManager, source_text, tr
+from .i18n import LanguageManager, SOURCE_ROLE, source_text, tr
 from .system import DATA_DIR, detect, disk_free, find_ollama, load_settings, save_settings
 
 
@@ -307,11 +309,23 @@ class Window(QMainWindow):
         row.addWidget(self.voice_budget)
         box.addLayout(row)
         controls, sliders = card()
+        sliders.addWidget(label("模型参数范围 · 0.5B–48B", "section"))
+        self.parameter_slider = QSlider(Qt.Orientation.Horizontal)
+        self.parameter_slider.setRange(1, 96)
+        self.parameter_slider.setSingleStep(1)
+        self.parameter_slider.setPageStep(2)
+        self.parameter_slider.setValue(round(saved_parameter(self.settings.get("parameter_limit", 27)) * 2))
+        self.parameter_slider.setToolTip("每格 0.5B；实际模型取范围内最近的已核对参数档，不会凭空生成模型。")
+        sliders.addWidget(self.parameter_slider)
+        self.parameter_label = label("", "muted", True)
+        self.parameter_label.setProperty('_i18n_skip', True)
+        sliders.addWidget(self.parameter_label)
+        self.parameter_slider.valueChanged.connect(self.parameter_changed)
         sliders.addWidget(label("精简与完全体 · 同一模型的五档精度", "section"))
         ends = QHBoxLayout()
         ends.addWidget(label("精简省资源", "muted"))
         ends.addStretch()
-        ends.addWidget(label("BF16 完全体", "muted"))
+        ends.addWidget(label("F16 / BF16 完全体", "muted"))
         sliders.addLayout(ends)
         self.compression_slider = QSlider(Qt.Orientation.Horizontal)
         self.compression_slider.setRange(1, 5)
@@ -429,12 +443,25 @@ class Window(QMainWindow):
         value = self.settings.get(key, default)
         return value if isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 5 else default
 
+    def parameter_changed(self):
+        # A deliberate parameter selection enters quantized-model recommendations only.
+        # It never deploys or switches the active model.
+        target = next(i for i in range(self.usage.count()) if (self.usage.itemData(i, SOURCE_ROLE) or self.usage.itemText(i)) == "压缩大模型")
+        self.usage.setCurrentIndex(target)
+        self.update_recommendation()
+
     def toggle_grade_availability(self):
         self.compression_availability.setVisible(not self.compression_availability.isVisible())
 
     def refresh_slider_labels(self):
         if not hasattr(self, "compression_slider"):
             return
+        limit = self.parameter_slider.value() / 2
+        actual = parameter_size(limit)
+        self.parameter_slider.setEnabled(self.operation is None)
+        self.parameter_label.setText(tr("参数上限 {0}B · 匹配 {1}B；拖动进入精简推荐，下载须主动点击。").format(f"{limit:g}", f"{actual:g}"))
+        if actual in {32.0, 46.7}:
+            self.parameter_label.setText(self.parameter_label.text() + "\n" + tr("该参数档无已核对单文件完全体，5档将推荐可用量化版本。"))
         level = self.compression_slider.value()
         title, quant = COMPRESSION_LEVELS[level]
         applicable = source_text(self.usage) == "压缩大模型"
@@ -451,7 +478,7 @@ class Window(QMainWindow):
 
     def update_recommendation(self):
         level, demand = self.compression_slider.value(), self.conversation_slider.value()
-        self.settings.update(compression_level=level, conversation_demand=demand, voice_budget=self.voice_budget.currentData())
+        self.settings.update(parameter_limit=self.parameter_slider.value() / 2, compression_level=level, conversation_demand=demand, voice_budget=self.voice_budget.currentData())
         legacy = "context" if CONVERSATION_LEVELS[demand][1] >= 16384 else "large"
         blocked = self.capacity.blockSignals(True)
         self.capacity.setCurrentIndex(self.capacity.findData(legacy))
@@ -462,17 +489,17 @@ class Window(QMainWindow):
             self.persist()
             return
         self.rec = recommend(self.hw.ram, self.hw.available, self.hw.vram, self.hw.disk,
-                             source_text(self.usage), source_text(self.preference), self.capacity.currentData(), self.voice_budget.currentData(), level, demand)
+                             source_text(self.usage), source_text(self.preference), self.capacity.currentData(), self.voice_budget.currentData(), level, demand, self.parameter_slider.value() / 2)
         self.grade_availability = []
         if source_text(self.usage) == "压缩大模型":
             for item in range(1, 6):
                 choice = recommend(self.hw.ram, self.hw.available, self.hw.vram, self.hw.disk,
-                    "压缩大模型", source_text(self.preference), legacy, self.voice_budget.currentData(), item, demand)
+                    "压缩大模型", source_text(self.preference), legacy, self.voice_budget.currentData(), item, demand, self.parameter_slider.value() / 2)
                 self.grade_availability.append((item, choice.effective_compression_level == item))
         self.refresh_slider_labels()
         comparisons = []
         for title, voice in [(tr("不开语音"), "off"), (tr("当前语音预算"), self.voice_budget.currentData())]:
-            plan = recommend(self.hw.ram,self.hw.available,self.hw.vram,self.hw.disk,source_text(self.usage),source_text(self.preference),legacy,voice,level,demand)
+            plan = recommend(self.hw.ram,self.hw.available,self.hw.vram,self.hw.disk,source_text(self.usage),source_text(self.preference),legacy,voice,level,demand,self.parameter_slider.value() / 2)
             comparisons.append(f"{title}: {plan.model.title if plan.model else tr('资源不足')} / {plan.context}")
         self.plan_comparison.setText("\n".join(comparisons))
         self.rec_badge.setText(f"{self.rec.context} tokens")
@@ -628,7 +655,8 @@ class Window(QMainWindow):
             conversation_demand=demand, usage=model.specialty if model else source_text(self.usage),
             compression_level=self.compression_slider.value() if model and model.specialty == "压缩大模型" else None,
             effective_compression_level=(model.compression_level or None) if model else None,
-            family=model.family if model else "", quant=model.quant if model else "")
+            family=model.family if model else "", quant=model.quant if model else "",
+            parameter_limit=self.parameter_slider.value() / 2, actual_parameters=PARAMETER_SIZES.get(tag))
         self.begin_operation(lambda j: runtime.one_click(tag, j.task, j.log.emit, j.progress.emit, context), self.deployed)
 
     def begin_operation(self, fn, success):
@@ -639,6 +667,7 @@ class Window(QMainWindow):
         self.deploy_button.setEnabled(False)
         self.install_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
+        self.parameter_slider.setEnabled(False)
         self.compression_slider.setEnabled(False)
         self.conversation_slider.setEnabled(False)
         for btn in self.model_buttons:

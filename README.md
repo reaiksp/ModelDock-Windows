@@ -1,14 +1,16 @@
 # ModelDock
 
+新增模型参数范围：0.5B–48B、0.5B步进，联动精简版本；显示实际匹配参数。 / New parameter-cap slider:0.5B–48B in0.5B steps, selecting corresponding quantized variants. [说明 / Details](docs/PARAMETER_RANGE.md)
+
 配套聊天：[ModelDock Chat（MDC）](https://github.com/reaiksp/ModelDock-Chat) · 人格、记忆、黑话与语音。
 
 **简体中文** | [English](README.en.md)
 
-面向 Windows 10 22H2 / Windows 11 x64 的本地文字模型桌面软件。界面使用 PySide6，推理由 Ollama 命令行运行环境提供。版本：0.5.0。
+面向 Windows 10 22H2 / Windows 11 x64 的本地文字模型桌面软件。界面使用 PySide6，推理由 Ollama 命令行运行环境提供。版本：0.5.1。
 
 开发协作署名：**OpenAI Codex**（AI 编程助手）。本项目初版代码与文档由 Codex 协助完成。
 
-## 双需求条（0.5.0）
+## 双需求条（0.5.1）
 
 “压缩大模型”用途提供上下两条五档设置。**拖动只更新推荐与偏好；点击“一键推荐并部署”或模型卡的“下载并部署”才下载。** 推荐不会自动切换正在使用的模型。
 
@@ -38,7 +40,7 @@
 
 ## 给普通用户
 
-下载 `ModelDock-0.5.0-windows-x64.zip`，**完整解压**后双击 `ModelDock.exe`。无需安装 Python，也无需云端 API 密钥。不要只复制 exe，旁边的 `_internal` 目录是必要依赖。
+下载 `ModelDock-0.5.1-windows-x64.zip`，**完整解压**后双击 `ModelDock.exe`。无需安装 Python，也无需云端 API 密钥。不要只复制 exe，旁边的 `_internal` 目录是必要依赖。
 
 1. 打开软件，自动检测处理器、系统内存、可用内存、NVIDIA 空闲显存与模型存储盘空间。
 2. 选择“通用对话 / 代码开发 / 压缩大模型”及速度／质量偏好，再调整两条需求设置。

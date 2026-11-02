@@ -55,6 +55,14 @@ def check():
         assert window.compression_slider.value() == 3  # invalid bool does not become level one
         assert window.conversation_slider.value() == 4  # legacy 16K migration
         assert window.capacity.isHidden()
+        assert (window.parameter_slider.minimum(), window.parameter_slider.maximum()) == (1, 96)
+        for step in range(1, 97):
+            window.parameter_slider.setValue(step)
+            assert window.settings['parameter_limit'] == step / 2
+            assert window.active_model == 'existing:latest'
+        window.parameter_slider.setValue(54)
+        result['continuous_parameter_range_no_download'] = True
+
         window.prompt.setPlainText("保持我的原始输入与偏好。")
         for level in range(1, 6):
             window.compression_slider.setValue(level)

@@ -1,16 +1,18 @@
 # ModelDock
 
+New parameter-cap slider:0.5B–48B in0.5B steps, selecting corresponding quantized variants. [说明 / Details](docs/PARAMETER_RANGE.md)
+
 Companion chat: [ModelDock Chat (MDC)](https://github.com/reaiksp/ModelDock-Chat) — personas, memory, slang and local voice.
 
 [简体中文](README.md) | **English**
 
-ModelDock 0.5.0 is a Windows desktop app for deploying local text models through the Ollama CLI. It detects the user's hardware, recommends a model, downloads it, verifies loading, and provides local API examples.
+ModelDock 0.5.1 is a Windows desktop app for deploying local text models through the Ollama CLI. It detects the user's hardware, recommends a model, downloads it, verifies loading, and provides local API examples.
 
 Development assistance: **OpenAI Codex**. The initial application code and documentation were developed with Codex assistance.
 
 Repository: [ModelDock-Windows](https://github.com/reaiksp/ModelDock-Windows). For personalities, persistent conversations, memory and slang learning, use the independent companion [ModelDock Chat (MDC)](https://github.com/reaiksp/ModelDock-Chat). The two applications use separate repositories and data directories.
 
-## Two requirement sliders (0.5.0)
+## Two requirement sliders (0.5.1)
 
 The **Compressed large model** use case has two five-step sliders. **Dragging only updates recommendations and preferences. Downloads begin when the user clicks the deployment button or a model card's Download and deploy button.** Dragging never changes the active chat model.
 

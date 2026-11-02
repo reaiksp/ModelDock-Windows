@@ -1,5 +1,6 @@
 """Conservative runtime estimates at 4096 context, in GiB; never model-size promises."""
 from dataclasses import dataclass, replace
+from .parameters import VARIANTS, parameter_size, download_gib, runtime_gib
 
 
 @dataclass(frozen=True)
@@ -59,12 +60,19 @@ for quant, download, memory, level, description in [
         "https://huggingface.co/ggml-org/Qwen3.8-27B-GGUF",
         "原始 BF16 GGUF" if level == 5 else "GGUF 量化", "Qwen3.8-27B", quant, level))
 
+PARAMETER_MODELS = [Model(r['tag'], r['family'] + ' · ' + r['quant'], download_gib(r), runtime_gib(r),
+    "压缩大模型", "按参数范围选择对应模型的量化版本；实际质量与资源需求须验收。",
+    "https://huggingface.co/" + r['repo'], "GGUF", r['family'], r['quant'], r['grade']) for r in VARIANTS]
+CATALOG.extend(PARAMETER_MODELS)
+PARAMETER_SIZES = {r['tag']: r['parameters'] for r in VARIANTS}
+PARAMETER_SIZES.update({m.tag: 27.0 for m in CATALOG if m.family == "Qwen3.8-27B"})
+
 COMPRESSION_LEVELS = {
-    1: ("精简省资源", "IQ2_XS"),
-    2: ("轻量保留", "IQ3_XXS"),
+    1: ("精简省资源", "≈2 bit"),
+    2: ("轻量保留", "≈3 bit"),
     3: ("均衡", "Q4_K_M"),
     4: ("高精度", "Q8_0"),
-    5: ("完全体", "BF16"),
+    5: ("完全体", "F16 / BF16"),
 }
 CONVERSATION_LEVELS = {
     1: ("短聊 · 基础记忆", 4096),
@@ -106,7 +114,7 @@ def deployment_disk(model):
 def fits_model(model, ram, available, vram, disk, context=4096, voice="off"):
     """Use the same context/speech resource checks for manual and recommended models."""
     budget, _, valid = resource_budget(ram, available, vram, voice)
-    return valid and model.memory + context_reserve(context) <= budget and disk >= deployment_disk(model)
+    return valid and model.memory + context_reserve(context) * (2 if model in PARAMETER_MODELS else 1) <= budget and disk >= deployment_disk(model)
 
 
 @dataclass(frozen=True)
@@ -124,13 +132,14 @@ class Recommendation:
 
 def recommend(ram: float, available: float, vram: float, disk: float,
               usage: str = "通用对话", preference: str = "均衡", profile="large", voice="off",
-              compression_level=None, conversation_demand=None) -> Recommendation:
+              compression_level=None, conversation_demand=None, parameter_limit=None) -> Recommendation:
+    selected_parameters = parameter_size(parameter_limit) if parameter_limit is not None else 27.0
     # GPU memory and system RAM are deliberately not added together.
     _level(compression_level, "模型档位")
     _level(conversation_demand, "对话与记忆需求")
     target = compression_level if usage == "压缩大模型" else None
     context = CONVERSATION_LEVELS[conversation_demand][1] if conversation_demand else (16384 if profile == "context" else 4096)
-    extra = context_reserve(context)
+    extra = context_reserve(context) * (2 if usage == "压缩大模型" and selected_parameters != 27 else 1)
     def result(model, reason, mode):
         effective = model.compression_level if model and target is not None else None
         return Recommendation(model, reason, mode, context, target, effective,
@@ -144,6 +153,7 @@ def recommend(ram: float, available: float, vram: float, disk: float,
         budget = min(budget, (5.0 if preference == "均衡" else 3.2) + extra)
     candidates = [m for m in CATALOG if m.specialty == usage
                   and m.memory + extra <= budget and disk >= deployment_disk(m)
+                  and (usage != "压缩大模型" or PARAMETER_SIZES.get(m.tag) == selected_parameters)
                   and (usage != "压缩大模型" or
                        (0 < m.compression_level <= target if target is not None else m.method == "GSQ + RCO"))]
     candidates.sort(key=lambda m: (m.memory, m.size))
@@ -164,7 +174,7 @@ def recommend(ram: float, available: float, vram: float, disk: float,
         if model.compression_level < target:
             notes += " 目标档超出当前文字、上下文、语音或磁盘预算，已明确推荐较低档；对话需求不变。"
     if model.method:
-        notes += " 同一 27B 模型；BF16 为原精度，其余档位均为量化，质量需实际验证。"
+        notes += (" 同一 27B 模型；BF16 为原精度，其余档位均为量化，质量需实际验证。" if parameter_limit is None else f" 参数上限 {parameter_limit:g}B，实际 {selected_parameters:g}B · {model.family} · {model.quant}。")
         if not gpu:
             notes += " CPU 大模型推理可能很慢。"
     return result(model, reason + notes, mode)
