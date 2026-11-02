@@ -10,6 +10,23 @@ Development assistance: **OpenAI Codex**. The initial application code and docum
 
 Repository: [ModelDock-Windows](https://github.com/reaiksp/ModelDock-Windows). For personalities, persistent conversations, memory and slang learning, use the independent companion [ModelDock Chat (MDC)](https://github.com/reaiksp/ModelDock-Chat). The two applications use separate repositories and data directories.
 
+## Compressed large-model experiment (0.4.0)
+
+The new **Compressed large model** use case offers [ISTA-DASLab's Qwen3.8-27B GSQ-RCO GGUF variants](https://huggingface.co/ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF). All four choices retain the **same 27B parameter family** at different quantization levels. This does not substitute a tiny model. Each catalog tag names an exact GGUF file. This update deploys only the text GGUF after pinned-revision and SHA-256 checks, importing it through the Ollama CLI. Visual input is not provided, and vision projections or MTP auxiliary files are not downloaded. Official file size and runtime-memory estimates are reported separately. Existing use cases and saved selections remain available.
+
+| Quantization | Download budget (GiB) | 4K runtime budget (GiB) |
+| --- | ---: | ---: |
+| IQ2_XS | 8.0 | 10.0 |
+| IQ2_S | 8.8 | 10.8 |
+| IQ3_XXS | 9.5 | 11.5 |
+| IQ3_S | 11.1 | 13.0 |
+
+These are planning estimates. **Download size is not VRAM use.** System headroom, disk space, 16K context and local speech reserves still apply; RAM is not added to VRAM. If no variant fits, the app declines this plan instead of silently switching to a small-parameter model. CPU users may deliberately choose Quality first, but 27B generation can be very slow. Successful loading does not guarantee a comfortable chat speed.
+
+Speed first selects a lower-resource fitting variant; Quality first favors the higher-bit choices that fit. GSQ + RCO and low-bit quantization do not guarantee lossless quality. Repeating a prompt cannot undo quantization errors or increase the context window. Older Ollama versions may not support the architecture or quantization format; actual download, loading and generation checks remain necessary.
+
+After successful deployment, MDC can explicitly import the model, 4K/16K context and speech budget through Connections → Apply MD deployment plan. Personalities, raw user input, profile data and API keys are preserved.
+
 ## In-app language switching and user input
 
 Use **Language / 语言** in the sidebar to switch immediately between Simplified Chinese and English. The choice persists across restarts. AI reply language is a separate preference: follow the user's input, Simplified Chinese, or English. An explicit reply preference is included in the request; changing the interface language does not change that preference.
@@ -32,7 +49,7 @@ The initial runtime and model downloads require internet access and sufficient d
 
 ## Recommendations
 
-The catalog includes Qwen 3 general-purpose text models and Qwen 2.5 Coder models. Recommendations account for available system memory, confirmed free NVIDIA VRAM, and free space on the model drive.
+The catalog includes Qwen 3 general-purpose text models, Qwen 2.5 Coder models, and the separate Qwen3.8-27B GSQ-RCO compressed-model use case. Recommendations account for available system memory, confirmed free NVIDIA VRAM, and free space on the model drive.
 
 System memory reserves at least 3 GiB or 20% of total RAM; VRAM reserves at least 1 GiB or 12%. RAM and VRAM are not simply added together. The first NVIDIA GPU is used to match MDC local speech on CUDA 0. CPU balanced/speed recommendations favor smaller models.
 
@@ -91,14 +108,10 @@ The build produces a portable directory, ZIP and SHA256 file in `dist/`. Dynamic
 
 This is an unsigned early test build. Clean Windows installation, driver coverage and real download connectivity still require environment-specific acceptance testing. See [release notes](RELEASE_NOTES.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
 
-## 两种容量模式 / Two capacity modes
+## Two capacity modes
 
-“大体量”以 4K 上下文优先选择可容纳的较大 Q4 文字模型；“大上下文”使用 16K，额外预留 4 GiB 上下文预算，通常选择更轻的模型。该余量是保守估算，不是精确 KV cache 计算或速度承诺；实际以上下文元数据和成功加载为准。资源不足不会假称可用。超出目录上限或低配置时不保证两种模式一定选出不同标签。
+Larger-model mode uses 4K context and favors the largest fitting model or higher-bit variant within the selected use case. Longer-context mode uses 16K and reserves another 4 GiB, typically choosing a lighter model or lower-bit variant. These are conservative planning estimates, not exact KV-cache sizes or speed guarantees. Actual model metadata and successful loading remain the final checks. The two modes need not select different tags at every hardware configuration or catalog limit.
 
-开启本地 0.6B / 1.7B 语音时，分别预留 4 / 7 GiB 显存及 4 / 5 GiB 内存。云端语音不计本地模型预算。模型权重不因模式改变，模式配置影响推荐和上下文。
+Local 0.6B/1.7B speech reserves 4/7 GiB VRAM and 4/5 GiB RAM respectively. Cloud speech adds no local speech-model reserve. The selected mode changes recommendations and context, not the number of parameters in a model.
 
-MD 成功部署后按模型保存方案。MDC“连接设置 → 应用 MD 部署方案”可显式导入模型、上下文与语音预算；不改写用户输入、人格或 API 密钥。MDC 按模型记住上下文，仍用模型元数据限制实际值。导入语音预算不代表语音模型已安装，需在语音页安装并启动服务。
-
-[语音录音、克隆与训练支持核对](docs/SPEECH_CAPABILITIES.md)。
-
-English: Larger-model mode prioritizes model size at 4K. Longer-context mode reserves an additional 4 GiB at 16K and typically recommends a smaller model. Both reserve local speech resources. These are planning estimates, not exact memory guarantees. MDC explicitly imports successful MD plans and clamps context to model metadata. Importing a speech budget does not install the speech model. User content and API credentials are preserved.
+MD records plans only after successful deployment. MDC can explicitly import the model, context and speech budget, then clamps context to model metadata. Importing a speech budget does not install or start a speech model. User content and API credentials are preserved. See the [speech cloning and training capability audit](docs/SPEECH_CAPABILITIES.md).

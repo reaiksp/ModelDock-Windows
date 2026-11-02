@@ -1,3 +1,28 @@
+# ModelDock 0.4.0 · 同参数大模型压缩实验
+
+- 新增“压缩大模型”用途：同一 Qwen3.8-27B GSQ-RCO 家族的 IQ2_XS / IQ2_S / IQ3_XXS / IQ3_S 精确 GGUF 文件，不以小参数模型替代。
+- 延续 4K 大体量 / 16K 大上下文和本地语音联合预算，手动部署与自动推荐共享资源校验。
+- 模型卡提供来源说明；保留既有用途、用户选择和 MDC 部署方案导入兼容性。
+- 内存不足时不给出该压缩方案；CPU 质量优先可主动尝试，界面提示速度可能很慢。
+- 下载体积、运行估算和实际性能分开说明；不宣称无损，不把重复提示当作量化修复。
+- 更新中英文界面、README 和构建版本。推荐、协议与界面回归结果见下方验证记录。
+
+English: Adds explicit same-27B GSQ-RCO GGUF quantization choices, preserving the existing context and speech budgets. No tiny-model substitution, lossless-quality claim, or automatic change to saved preferences.
+
+Source: [ISTA-DASLab model card and exact files](https://huggingface.co/ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF).
+
+## 本次验证 / Validation
+
+- 60 项自动测试通过；打包后的独立程序启动与中英文界面检查通过。
+- 已在本机 Ollama 0.40.13、RTX 5080 上完整下载并校验 IQ2_XS（8422841472 字节），通过本地 CLI 导入及 4096 上下文真实加载。
+- 使用独立临时数据库的虚构记忆与人格验证通过：主聊天和私有快照均正确复述测试代号；短请求复述实验保留原文并得到算术结果。未使用真实用户聊天或启动语音，临时私有快照已删除，压缩基础模型保留供使用。
+- IQ2_S / IQ3_XXS / IQ3_S 仅核对上游文件、GGUF 元数据和自动化兼容路径，未全量下载推理。16K、CPU、其他显卡及与 TTS 同时运行仍需硬件验收；并发语音检查目前是资源预算，不是性能实测。
+- 真实短提示实验仅验证可运行与原文保留，没有证明重复可改善量化质量。
+
+English: 60 automated tests and frozen startup checks passed. Full IQ2_XS download/hash/CLI import/4K inference passed on the local RTX 5080, including synthetic approved-memory, persona and private-snapshot recall. Other quantizations, 16K, CPU and concurrent TTS were not tested with full weights. Repetition is not a demonstrated quality improvement.
+
+---
+
 # 0.3.0 容量模式与语音兼容更新
 
 - 大上下文 / 大体量两种资源推荐。

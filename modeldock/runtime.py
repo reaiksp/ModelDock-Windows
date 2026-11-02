@@ -78,6 +78,14 @@ def status():
         return None
 
 
+def model_key(name):
+    """Compare Ollama names after its case/default-tag normalization."""
+    name = name.strip().casefold()
+    if name.startswith("huggingface.co/"):
+        name = "hf.co/" + name[len("huggingface.co/"):]
+    return name if ":" in name.rsplit("/", 1)[-1] else name + ":latest"
+
+
 def installed():
     return request("/api/tags").get("models", [])
 
@@ -126,6 +134,9 @@ def pull(tag, task, log, progress):
     cli = find_ollama()
     if not cli:
         raise RuntimeError("Ollama CLI 不可用，请安装运行环境。")
+    from .gguf import is_supported, install_gguf
+    if is_supported(tag):
+        return install_gguf(tag, cli, model_dir() / ".modeldock-gguf", task, log, progress)
     log(f"执行：ollama pull {tag}")
     proc = subprocess.Popen([cli, "pull", tag], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             stdin=subprocess.DEVNULL, env=cli_env(), creationflags=FLAGS)
@@ -163,9 +174,11 @@ def pull(tag, task, log, progress):
         if code:
             detail = ANSI.sub("", tail).strip() or last_line
             raise RuntimeError(f"模型下载失败（退出码 {code}）。{detail[-1000:]}\n请检查网络及磁盘后重试。")
-        if tag not in {m.get("name") for m in installed()}:
+        actual = next((m.get("name") for m in installed() if model_key(m.get("name", "")) == model_key(tag)), None)
+        if not actual:
             raise RuntimeError("下载命令结束，但本地模型列表中未找到目标模型。请刷新后重试。")
         progress(100, "模型已下载并校验，正在准备推理…")
+        return actual
     finally:
         if proc.poll() is None:
             proc.terminate()
@@ -192,8 +205,8 @@ def warmup(tag, task, log, context=4096):
 
 
 def deploy(tag, task, log, progress, context=4096):
-    pull(tag, task, log, progress)
-    return warmup(tag, task, log, context)
+    actual = pull(tag, task, log, progress)
+    return warmup(actual or tag, task, log, context)
 
 
 def stream_chat(tag, messages, task, emit, response_language="auto", context=4096):

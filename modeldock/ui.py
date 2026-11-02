@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import __version__, runtime
-from .catalog import CATALOG, recommend
+from .catalog import CATALOG, deployment_disk, fits_model, recommend
 from .i18n import LanguageManager, source_text, tr
 from .system import DATA_DIR, detect, disk_free, find_ollama, load_settings, save_settings
 
@@ -279,7 +279,7 @@ class Window(QMainWindow):
         config = QHBoxLayout()
         config.addWidget(label("主要用途"))
         self.usage = QComboBox()
-        self.usage.addItems(["通用对话", "代码开发"])
+        self.usage.addItems(["通用对话", "代码开发", "压缩大模型"])
         self.usage.setCurrentText(self.settings.get("usage", "通用对话"))
         config.addWidget(self.usage, 1)
         config.addWidget(label("推荐偏好"))
@@ -345,7 +345,7 @@ class Window(QMainWindow):
         box.addWidget(progress_frame)
         self.install_button = button("安装 / 检查 Ollama 运行环境", self.install)
         box.addWidget(self.install_button, alignment=Qt.AlignmentFlag.AlignLeft)
-        box.addWidget(label("模型下载自 Ollama 官方仓库；体积与内存是估算值。推荐不保证所有驱动均可加速，实际以加载结果为准。", "muted", True))
+        box.addWidget(label("常规模型经 Ollama CLI 下载；压缩大模型固定版本下载、校验后经 CLI 导入。体积与内存为估算，实际以加载结果为准。", "muted", True))
         box.addStretch()
 
     def scan(self):
@@ -379,7 +379,7 @@ class Window(QMainWindow):
         self.rec = recommend(self.hw.ram, self.hw.available, self.hw.vram, self.hw.disk,
                              source_text(self.usage), source_text(self.preference), self.capacity.currentData(), self.voice_budget.currentData())
         comparisons = []
-        for title, profile in [(tr("大体量"), "large"), (tr("大上下文"), "context")]:
+        for title, profile in [("大体量", "large"), ("大上下文", "context")]:
             plan = recommend(self.hw.ram,self.hw.available,self.hw.vram,self.hw.disk,source_text(self.usage),source_text(self.preference),profile,self.voice_budget.currentData())
             comparisons.append(f"{title}: {plan.model.title if plan.model else tr('资源不足')} / {plan.context}")
         self.plan_comparison.setText("\n".join(comparisons))
@@ -422,7 +422,11 @@ class Window(QMainWindow):
             col.addWidget(label(model.title, "section"))
             col.addWidget(label(model.description, "muted", True))
             col.addWidget(label(f"4K 运行预算 ≈ {model.memory:g} GiB", "muted"))
-            btn = button("下载并部署", lambda checked=False, m=model: self.start_deploy(m.tag, m.size, m.memory, self.rec.context, self.capacity.currentData(), self.voice_budget.currentData()))
+            if model.method:
+                col.addWidget(label(f"{model.family} · {model.method} · {model.quant}", "muted", True))
+                col.addWidget(label("压缩导入需预留缓存与模型双份空间。", "muted", True))
+                col.addWidget(button("压缩模型来源与说明 ↗", lambda checked=False, url=model.source: QDesktopServices.openUrl(QUrl(url))))
+            btn = button("下载并部署", lambda checked=False, m=model: self.start_deploy(m.tag, m.size, m.memory, 16384 if self.capacity.currentData() == "context" else 4096, self.capacity.currentData(), self.voice_budget.currentData()))
             col.addWidget(btn)
             self.model_buttons.append(btn)
             grid.addWidget(frame, index // 2, index % 2)
@@ -443,15 +447,44 @@ class Window(QMainWindow):
             self.local_combo.blockSignals(True)
             self.local_combo.clear()
             self.local_combo.addItems(names)
-            if self.active_model in names:
-                self.local_combo.setCurrentText(self.active_model)
-            else:
-                self.active_model = names[0] if names else ""
+            selected = next((name for name in names if runtime.model_key(name) == runtime.model_key(self.active_model)), None)
+            changed = self.adopt_model_name(selected if selected is not None else (names[0] if names else ""))
+            self.local_combo.setCurrentText(self.active_model)
             self.local_combo.blockSignals(False)
             self.chat_model.setText(self.active_model or "尚无可用模型，请先部署")
             self.update_api()
+            if changed:
+                self.persist()
         job = self.launch(fetch, complete, lambda msg: self.log(msg))
         job.finished.connect(lambda: setattr(self, "checking", False))
+
+    def adopt_model_name(self, actual):
+        """Use Ollama's returned spelling and migrate matching plan aliases losslessly."""
+        changed = self.active_model != actual
+        self.active_model = actual
+        if not actual:
+            return changed
+        plans = self.settings.setdefault("model_plans", {})
+        aliases = [name for name in plans if name != actual and runtime.model_key(name) == runtime.model_key(actual)]
+        for alias in aliases:
+            previous = plans.pop(alias)
+            # Preserve the exact old value in case aliases held conflicting options.
+            archive = self.settings.setdefault("model_plan_aliases", {})
+            backup, revision = alias, 2
+            while backup in archive and archive[backup] != previous:
+                backup = alias + "#" + str(revision)
+                revision += 1
+            archive[backup] = previous
+            if isinstance(previous, dict):
+                merged = dict(previous)
+                merged.update(plans.get(actual, {}))
+                merged["model"] = actual
+                plans[actual] = merged
+            changed = True
+        if isinstance(plans.get(actual), dict) and plans[actual].get("model") != actual:
+            plans[actual] = dict(plans[actual], model=actual)
+            changed = True
+        return changed
 
     def select_model(self, name):
         if self.chat_job:
@@ -476,19 +509,24 @@ class Window(QMainWindow):
         if self.chat_job:
             self.error("请先停止当前对话生成，再部署其他模型。")
             return
+        if not self.hw:
+            self.error("请先完成配置检测，再部署模型。")
+            return
+        model = next((m for m in CATALOG if runtime.model_key(m.tag) == runtime.model_key(tag)), None)
+        required_disk = deployment_disk(model) if model else size * 1.15 + 1
         try:
             free = disk_free(self.hw.models_path if self.hw else runtime.model_dir())
-            if free < size * 1.15 + 1:
-                raise RuntimeError(f"模型存储盘仅剩 {free:.1f} GiB，建议至少 {size * 1.15 + 1:.1f} GiB。")
+            if free < required_disk:
+                raise RuntimeError(f"模型存储盘仅剩 {free:.1f} GiB，建议至少 {required_disk:.1f} GiB。")
         except OSError as exc:
             self.error(f"无法检查模型存储盘：{exc}")
             return
         except RuntimeError as exc:
             self.error(str(exc))
             return
-        if self.hw and memory > max(self.hw.available - 1, self.hw.vram - 1):
-            if QMessageBox.question(self, "配置可能不足", f"该模型估计需 {memory:g} GiB，超过当前可用预算，可能加载失败。仍要下载吗？") != QMessageBox.StandardButton.Yes:
-                return
+        if model and not fits_model(model, self.hw.ram, self.hw.available, self.hw.vram, free, context, voice):
+            self.error("当前模型、上下文与语音组合超过可用预算，请选择更低位宽、关闭本地语音或重新检测。")
+            return
         self.navigate(0)
         self.task_title.setText(f"03  /  正在部署 {tag}")
         self.pending_plan = dict(model=tag, context=context, capacity=profile, voice=voice)
@@ -537,8 +575,11 @@ class Window(QMainWindow):
 
     def deployed(self, tag):
         self.clear_chat()
-        self.active_model = tag
-        self.settings.setdefault("model_plans", {})[tag] = dict(self.pending_plan)
+        self.adopt_model_name(tag)
+        self.pending_plan = dict(self.pending_plan, model=tag)
+        plan = dict(self.settings.setdefault("model_plans", {}).get(tag, {}))
+        plan.update(self.pending_plan)
+        self.settings["model_plans"][tag] = plan
         self.task_title.setText("03  /  部署完成 ✓")
         self.task_detail.setText(f"{tag} 已加载。前往“本地对话”体验，或复制 API 示例开始接入。")
         self.progress.setRange(0, 100)
